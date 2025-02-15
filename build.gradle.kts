@@ -34,3 +34,10 @@ tasks.withType<JavaCompile> {
 tasks.withType<Test> {
     useJUnitPlatform()
 }
+
+tasks {
+    patchPluginXml {
+        sinceBuild.set("231")
+        untilBuild.set("233.*")
+    }
+}
