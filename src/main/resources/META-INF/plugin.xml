@@ -1,0 +1,24 @@
+<idea-plugin>
+    <id>com.project.pmd-llm-refactor</id>
+    <name>PMD-LLM Refactor</name>
+    <vendor email="Smoussa541@outlook.com" url="https://github.com/Samo5412/pmd-llm-refactor-plugin">Group 9</vendor>
+
+    <description>
+        A plugin that integrates PMD for static code analysis and LLM-based refactoring suggestions.
+    </description>
+
+    <version>1.0.0</version>
+    <change-notes>
+        Initial release.
+    </change-notes>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!--Plugin functionalities -->
+    </extensions>
+
+    <actions>
+        <!-- Plugin actions -->
+    </actions>
+</idea-plugin>
