@@ -5,12 +5,4 @@
  * For more detailed information on multi-project builds, please refer to https://docs.gradle.org/8.12.1/userguide/multi_project_builds.html in the Gradle documentation.
  */
 
-// configures plugin management for the project, specifying the Kotlin JVM plugin version.
-// ensures consistent usage of Kotlin version 1.9.0 across all modules,
-pluginManagement {
-    plugins {
-        kotlin("jvm") version "1.9.0"
-    }
-}
-
 rootProject.name = "pmd-llm-refactor-plugin"

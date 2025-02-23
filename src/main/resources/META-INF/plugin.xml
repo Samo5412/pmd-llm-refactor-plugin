@@ -19,9 +19,6 @@
     </extensions>
 
     <actions>
-        <action id="com.project.actions.PMDAnalysisAction" class="com.project.actions.PMDAnalysisAction" text="PMD ANALYSIS ACTION">
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
-        </action>
+        <!-- Plugin actions -->
     </actions>
 </idea-plugin>
