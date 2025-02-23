@@ -5,9 +5,19 @@
  * Learn more about Gradle by exploring our Samples at https://docs.gradle.org/8.12.1/samples
  */
 
+// Plugin definitions
 plugins {
     id("java")
-    id("org.jetbrains.intellij") version "1.17.4"
+    id("org.jetbrains.intellij") version "1.17.4" // adds IntelliJ plugin for creating IntelliJ IDEA plugins
+    kotlin("jvm")
+    id("pmd")
+}
+
+pmd {
+    toolVersion = "7.10.0" // PMD version
+    isConsoleOutput = true // enables console output for PMD reports
+    ruleSetFiles = files("config/pmd/pmd.xml") // path to custom PMD rules
+
 }
 
 group = "com.project"
@@ -19,12 +29,26 @@ repositories {
 
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
+    implementation("net.sourceforge.pmd:pmd-core:7.10.0")
+    implementation("net.sourceforge.pmd:pmd-java:7.10.0")
+    implementation(kotlin("stdlib-jdk8"))
 }
 
+// intelliJ plugin configuration
 intellij {
-    version.set("2024.2")
-    type.set("IC")
-    plugins.set(listOf("java"))
+    version.set("2024.2") // Sets the IntelliJ IDEA version for the plugin
+    type.set("IC") // IntelliJ Community Edition
+    plugins.set(listOf("java")) // includes Java plugin for IntelliJ IDEA
+}
+
+kotlin {
+    jvmToolchain(17) // Specifies JDK 17 as the target JVM for Kotlin code
+}
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17)) // specifies Java 17 as the toolchain for compiling Java code
+    }
 }
 
 tasks.withType<JavaCompile> {
@@ -36,8 +60,13 @@ tasks.withType<Test> {
 }
 
 tasks {
+    withType<JavaCompile> {
+        sourceCompatibility = "17" // sets the source compatibility to Java 17
+        targetCompatibility = "17" // sets the target compatibility to Java 17
+    }
+
     patchPluginXml {
-        sinceBuild.set("231")
-        untilBuild.set("233.*")
+        sinceBuild.set("233") // minimum IntelliJ build version that the plugin is compatible with
+        untilBuild.set("243.*") // maximum IntelliJ build version the plugin is compatible with
     }
 }
