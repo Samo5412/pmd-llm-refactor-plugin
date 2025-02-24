@@ -32,6 +32,10 @@ dependencies {
     implementation("net.sourceforge.pmd:pmd-core:7.10.0")
     implementation("net.sourceforge.pmd:pmd-java:7.10.0")
     implementation(kotlin("stdlib-jdk8"))
+    implementation("io.github.cdimascio:dotenv-java:3.2.0")
+    implementation ("com.fasterxml.jackson.core:jackson-databind:2.16.0")
+    implementation ("org.apache.httpcomponents.client5:httpclient5:5.2.1")
+    implementation ("org.apache.logging.log4j:log4j-slf4j-impl:2.20.0")
 }
 
 // intelliJ plugin configuration
