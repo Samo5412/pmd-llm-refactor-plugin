@@ -1,7 +1,8 @@
 package com.project.api.config;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.project.api.exceptions.APIConnectionException;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -14,14 +15,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Handles communication with the Hugging Face API using HTTP requests.
+ * Handles communication with the OpenRouter API using HTTP requests.
  *
  * @author Sara Moussa
  */
 public class LLMApiClient {
 
-    private static final String API_URL = EnvLoader.getHFApiUrl();
-    private static final String API_KEY = EnvLoader.getHFApiToken();
+    private static final String API_URL = EnvLoader.getOpenRouterApiUrl();
+    private static final String API_KEY = EnvLoader.getOpenRouterApiKey();
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     /** Private constructor */
@@ -30,7 +31,7 @@ public class LLMApiClient {
     }
 
     /**
-     * Sends a request to the Hugging Face LLM API.
+     * Sends a request to the OpenRouter LLM API.
      *
      * @param inputText The input text to be refactored.
      * @return The generated response from the LLM.
@@ -45,28 +46,38 @@ public class LLMApiClient {
             }
 
         } catch (IOException e) {
-            throw new APIConnectionException("Error connecting to LLM API: " + e.getMessage());
+            throw new APIConnectionException("Error connecting to OpenRouter API: " + e.getMessage());
         }
     }
 
     /**
-     * Creates an HTTP POST request for the Hugging Face LLM API.
+     * Creates an HTTP POST request for the OpenRouter LLM API.
      *
      * @param inputText The input text to be refactored.
      * @return The configured HttpPost request.
      */
     private static HttpPost createRequest(String inputText) {
-        HttpPost request = new HttpPost(API_URL);
+        HttpPost request = new HttpPost(API_URL + "/chat/completions");
 
         request.setHeader("Authorization", "Bearer " + API_KEY.trim());
         request.setHeader("Content-Type", ContentType.APPLICATION_JSON.getMimeType());
 
-        String jsonPayload = String.format(
-                "{\"inputs\": \"Refactor the following code: %s\", \"parameters\": {\"max_length\": 500, \"temperature\": 0.7, \"top_p\": 0.9}}",
-                inputText
-        );
+        ObjectNode requestJson = objectMapper.createObjectNode();
+        requestJson.put("model", "deepseek/deepseek-r1-distill-llama-70b:free");
+        requestJson.put("include_reasoning", true);
 
-        request.setEntity(new StringEntity(jsonPayload, StandardCharsets.UTF_8));
+        ArrayNode messages = requestJson.putArray("messages");
+        ObjectNode userMessage = messages.addObject();
+        userMessage.put("role", "user");
+        userMessage.put("content", inputText);
+
+        try {
+            String jsonPayload = objectMapper.writeValueAsString(requestJson);
+            request.setEntity(new StringEntity(jsonPayload, StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            throw new RuntimeException("Error creating JSON payload: " + e.getMessage());
+        }
+
         return request;
     }
 
@@ -80,18 +91,19 @@ public class LLMApiClient {
      */
     private static String handleResponse(CloseableHttpResponse response) throws IOException, APIConnectionException {
         int statusCode = response.getCode();
+        String responseBody = new String(response.getEntity().getContent().readAllBytes(), StandardCharsets.UTF_8);
 
         if (statusCode != 200) {
-            throw new APIConnectionException("Failed API request. Response code: " + statusCode);
+            throw new APIConnectionException("Failed API request. Response code: " + statusCode + ". Response: " + responseBody);
         }
 
-        JsonNode jsonResponse = objectMapper.readTree(response.getEntity().getContent());
-        JsonNode generatedTextNode = jsonResponse.get(0).get("generated_text");
+        ObjectNode jsonResponse = (ObjectNode) objectMapper.readTree(responseBody);
+        ArrayNode choices = (ArrayNode) jsonResponse.get("choices");
 
-        if (generatedTextNode == null || generatedTextNode.isNull()) {
-            throw new APIConnectionException("Invalid API response: Missing 'generated_text' field.");
+        if (choices == null || choices.isEmpty()) {
+            throw new APIConnectionException("Invalid API response: Missing 'choices' field.");
         }
 
-        return generatedTextNode.asText();
+        return choices.get(0).get("message").get("content").asText();
     }
 }

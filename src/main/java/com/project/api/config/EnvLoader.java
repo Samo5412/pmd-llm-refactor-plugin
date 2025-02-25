@@ -24,30 +24,29 @@ public class EnvLoader {
             .ignoreIfMissing()
             .load();
 
-
     /**
-     * Retrieves the Hugging Face API token from the environment variables.
+     * Retrieves the OpenRouter API key from the environment variables.
      *
-     * @return the Hugging Face API token as a String
-     * @throws MissingAPIKeyException if the API token is not found
+     * @return the OpenRouter API token as a String
+     * @throws MissingAPIKeyException if the API key is not found
      */
-    public static String getHFApiToken() {
-        String apiToken = dotenv.get("HF_API_TOKEN");
-        if (apiToken == null || apiToken.isEmpty()) {
-            throw new MissingAPIKeyException("Hugging Face API token is missing in the environment variables.");
+    public static String getOpenRouterApiKey() {
+        String apiKey = dotenv.get("OPENROUTER_API_KEY");
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new MissingAPIKeyException("OpenRouter API token is missing in the environment variables.");
         }
-        return apiToken;
+        return apiKey;
     }
 
     /**
-     * Retrieves the Hugging Face API URL from the environment variables.
+     * Retrieves the OpenRouter API URL from the environment variables.
      *
-     * @return the Hugging Face API URL as a String
+     * @return the OpenRouter API URL as a String
      */
-    public static String getHFApiUrl() {
-        String apiUrl = dotenv.get("HF_API_URL");
+    public static String getOpenRouterApiUrl() {
+        String apiUrl = dotenv.get("OPENROUTER_API_URL");
         if (apiUrl == null || apiUrl.isEmpty()) {
-            throw new IllegalArgumentException("Hugging Face API URL is missing in the environment variables.");
+            throw new IllegalArgumentException("OpenRouter API URL is missing in the environment variables.");
         }
         return apiUrl;
     }
