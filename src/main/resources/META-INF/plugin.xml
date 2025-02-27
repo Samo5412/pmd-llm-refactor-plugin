@@ -15,7 +15,13 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!--Plugin functionalities -->
+        <!-- Registering Tool Window for UI -->
+        <toolWindow
+                id="PMD-LLM-Refactor"
+                anchor="right"
+                factoryClass="com.project.ui.PMDToolWindowFactory"
+                secondary="false"
+                canCloseContents="true" />
     </extensions>
 
     <actions>
