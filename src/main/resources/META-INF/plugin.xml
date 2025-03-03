@@ -15,13 +15,17 @@
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!--Plugin functionalities -->
+        <!-- Registering Tool Window for UI -->
+        <toolWindow
+                id="PMD-LLM-Refactor"
+                anchor="right"
+                factoryClass="com.project.ui.PluginToolWindowFactory"
+                secondary="false"
+                canCloseContents="false"
+                />
     </extensions>
 
     <actions>
-        <action id="com.project.actions.PMDAnalysisAction" class="com.project.actions.PMDAnalysisAction" text="PMD ANALYSIS ACTION">
-            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
-            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
-        </action>
+        <!-- Plugin actions -->
     </actions>
 </idea-plugin>
