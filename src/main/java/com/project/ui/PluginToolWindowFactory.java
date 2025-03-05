@@ -9,6 +9,7 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.project.logic.FileDetector;
+import com.project.logic.PMDAnalyzer;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -127,9 +128,8 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
             return;
         }
 
-        // TODO: Implement PMD Analysis once PMDAnalyzer is available
         SwingUtilities.invokeLater(() -> {
-            String result = "PMD analysis result placeholder";
+            String result = PMDAnalyzer.analyzeFile(project, file);
             resultTextArea.setText(result);
             statusLabel.setText("PMD Analysis completed!");
         });
