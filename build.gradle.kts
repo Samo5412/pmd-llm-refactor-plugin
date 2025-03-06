@@ -18,7 +18,6 @@ plugins {
 pmd {
     toolVersion = "7.10.0"
     isConsoleOutput = true
-    ruleSetFiles = files("config/pmd/pmd.xml")
 }
 
 // Project metadata
