@@ -32,6 +32,7 @@ repositories {
 // Dependencies including PMD, Kotlin, and required libraries
 dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.4.0")
     implementation("net.sourceforge.pmd:pmd-core:7.10.0")
     implementation("net.sourceforge.pmd:pmd-java:7.10.0")
     implementation(kotlin("stdlib-jdk8"))
@@ -39,6 +40,7 @@ dependencies {
     implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
     implementation("org.apache.httpcomponents.client5:httpclient5:5.2.1")
     implementation("org.apache.logging.log4j:log4j-slf4j-impl:2.20.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
 // IntelliJ plugin configuration
