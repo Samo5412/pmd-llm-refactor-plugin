@@ -6,6 +6,8 @@ import org.apache.logging.log4j.Logger;
 /**
  * Utility class for logging messages across the application.
  * Provides logging methods that dynamically identify the calling class.
+ *
+ * @author Sara Moussa
  */
 public class LoggerUtil {
 
