@@ -2,111 +2,90 @@ package com.project.logic;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import net.sourceforge.pmd.PMDConfiguration;
-import net.sourceforge.pmd.PmdAnalysis;
-import net.sourceforge.pmd.lang.java.JavaLanguageModule;
-import net.sourceforge.pmd.renderers.TextRenderer;
+import com.project.model.CodeBlockInfo;
+import com.project.model.Violation;
+import com.project.util.LoggerUtil;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringWriter;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.util.List;
 
 /**
- * Utility class for running custom PMD code analysis on Java files.
+ * Handles the complete process of PMD analysis, violation extraction, and response formatting.
+ *
+ * @author Micael Olsson
  */
 public class PMDAnalyzer {
 
-    private static File ruleSetFile;
+    /** Runs PMD analysis on Java files. */
+    private final PMDRunner pmdRunner;
 
-    static {
-        try {
-            Class.forName("net.sourceforge.pmd.PMDConfiguration");
-            Class.forName("net.sourceforge.pmd.PmdAnalysis");
-            Class.forName("net.sourceforge.pmd.renderers.TextRenderer");
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("Required PMD classes not found.", e);
-        }
-        initializeRuleSetFile();
+    /** Extracts violations from PMD output. */
+    private final ViolationExtractor violationExtractor;
+
+    /** Parses Java files to extract violated code blocks. */
+    private final CodeParser codeParser;
+
+    /** Formats analysis results into user-friendly and API responses. */
+    private final ResponseFormatter responseFormatter;
+
+    /**
+     * Initializes the analyzer with required dependencies.
+     *
+     * @param pmdRunner          PMD execution utility.
+     * @param violationExtractor Extracts violations from PMD output.
+     * @param codeParser Extracts violated code blocks.
+     * @param responseFormatter  Formats analysis results.
+     */
+    public PMDAnalyzer(PMDRunner pmdRunner, ViolationExtractor violationExtractor,
+                       CodeParser codeParser, ResponseFormatter responseFormatter) {
+        this.pmdRunner = pmdRunner;
+        this.violationExtractor = violationExtractor;
+        this.codeParser = codeParser;
+        this.responseFormatter = responseFormatter;
     }
 
     /**
-     * Initializes the PMD ruleset file by loading it into a temporary file
-     * from resources.
+     * Runs the full PMD analysis on a Java file and returns a user-friendly response.
+     *
+     * @param project The IntelliJ project containing the file.
+     * @param file    The Java file to analyze.
+     * @return A user-friendly analysis result message.
      */
-    private static void initializeRuleSetFile() {
-        try (InputStream inputStream = PMDAnalyzer.class.getResourceAsStream("/config/pmd/pmd.xml")) {
-            if (inputStream == null) {
-                throw new IllegalStateException("PMD ruleset file not found in resources.");
-            }
-
-            if (ruleSetFile == null) {
-                ruleSetFile = File.createTempFile("pmd-ruleset", ".xml");
-                ruleSetFile.deleteOnExit();
-                Files.copy(inputStream, ruleSetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (IOException e) {
-            throw new IllegalStateException("Error loading PMD ruleset file from resources.", e);
-        }
-    }
-
-    /**
-     * Analyzes the provided Java file using a custom PMD ruleset and gives
-     * a text-based report of the issues found.
-     * @param project The current IntelliJ project.
-     * @param file The Java file to analyze.
-     * @return A string containing the analysis results.
-     */
-    public static String analyzeFile(Project project, VirtualFile file) {
+    public String analyzeFile(Project project, VirtualFile file) {
         validateProjectAndFile(project, file);
+        String filePath = file.getPath();
 
-        PMDConfiguration config = createPMDConfiguration(file);
+        LoggerUtil.info("Starting PMD analysis for file: " + filePath);
 
-        StringWriter writer = new StringWriter();
-        TextRenderer renderer = new TextRenderer();
-        renderer.setWriter(writer);
-        // TODO: Configure output format further.
+        String pmdOutput = pmdRunner.runPMD(filePath);
+        List<Violation> violations = violationExtractor.extractViolations(pmdOutput);
 
-        try (PmdAnalysis pmd = PmdAnalysis.create(config)) {
-            pmd.addRenderer(renderer);
-            pmd.performAnalysis();
-        } catch (Exception e) {
-            e.printStackTrace();
-            return "Error running PMD: " + e.getMessage();
+        if (violations.isEmpty()) {
+            LoggerUtil.info("No issues found in file: " + filePath);
+            return "No issues found.";
         }
 
-        return writer.toString().isEmpty() ? "No issues found." : writer.toString();
+        List<CodeBlockInfo> codeBlocksInfo = codeParser.extractViolatedBlocksInfo(filePath, violations);
+
+        // Log JSON response
+        String jsonResponse = responseFormatter.formatApiResponse(codeBlocksInfo);
+        LoggerUtil.info("Generated API JSON response: " + jsonResponse);
+
+        return responseFormatter.formatUserResponse(codeBlocksInfo);
     }
 
     /**
-     * Validates the inputs for the analyzeFile method.
+     * Validates the project and file input before proceeding with analysis.
+     *
+     * @param project The IntelliJ project.
+     * @param file    The Java file to analyze.
+     * @throws IllegalArgumentException if project or file is null.
      */
-    private static void validateProjectAndFile(Project project, VirtualFile file) {
+    private void validateProjectAndFile(Project project, VirtualFile file) {
         if (project == null) {
-            throw new IllegalArgumentException("The project must not be null.");
+            throw new IllegalArgumentException("Project must not be null.");
         }
         if (file == null) {
-            throw new IllegalArgumentException("The file must not be null.");
+            throw new IllegalArgumentException("File must not be null.");
         }
-    }
-
-    /**
-     * Creates and configures a PMDConfiguration object with desired settings.
-     * @param file The Java file to analyze.
-     * @return A configured PMDConfiguration instance.
-     */
-    private static PMDConfiguration createPMDConfiguration(VirtualFile file) {
-        PMDConfiguration config = new PMDConfiguration();
-        config.setDefaultLanguageVersion(JavaLanguageModule.getInstance().getVersion("17"));
-
-        String ruleSetPath = ruleSetFile.getAbsolutePath();
-        config.addRuleSet(ruleSetPath);
-        config.addInputPath(Paths.get(file.getPath()));
-        config.setReportFormat("text");
-
-        return config;
     }
 }
