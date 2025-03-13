@@ -1,5 +1,6 @@
 package com.project.ui;
 
+import com.github.javaparser.JavaParser;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
@@ -8,8 +9,7 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
-import com.project.logic.FileDetector;
-import com.project.logic.PMDAnalyzer;
+import com.project.logic.*;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -129,7 +129,14 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         }
 
         SwingUtilities.invokeLater(() -> {
-            String result = PMDAnalyzer.analyzeFile(project, file);
+            PMDAnalyzer pmdAnalyzer = new PMDAnalyzer(
+                    new PMDRunner(),
+                    new ViolationExtractor(),
+                    new CodeParser(new JavaParser()),
+                    new ResponseFormatter()
+            );
+
+            String result = pmdAnalyzer.analyzeFile(project, file);
             resultTextArea.setText(result);
             statusLabel.setText("PMD Analysis completed!");
         });
