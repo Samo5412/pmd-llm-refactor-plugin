@@ -11,7 +11,7 @@
 
         <!-- File Logger -->
         <RollingFile name="FileLogger"
-                     fileName="${sys:user.home}/p.md-llm-plugin/logs/application.log"
+                     fileName="${sys:user.home}/.pmd-llm-plugin/logs/application.log"
                      filePattern="${sys:user.home}/.pmd-llm-plugin/logs/application-%i.log.gz">
             <PatternLayout>
                 <Pattern>%d{yyyy-MM-dd HH:mm:ss} [%t] %-5level %logger{36} - %msg%n</Pattern>
