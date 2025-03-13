@@ -43,13 +43,17 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.apache.logging.log4j:log4j-api:2.20.0")
     implementation("org.apache.logging.log4j:log4j-core:2.20.0")
+
+    // JavaParser (
+    implementation("com.github.javaparser:javaparser-core:3.25.8")
 }
 
 // IntelliJ plugin configuration
 intellij {
-    version.set("2024.2")
+    version.set("2024.3")
     type.set("IC")
     plugins.set(listOf("java"))
+    downloadSources.set(true)
 }
 
 // Java and Kotlin toolchain settings
@@ -64,24 +68,21 @@ java {
 }
 
 // Ensures correct file handling and prevents duplicate JAR entries
-tasks {
-    jar {
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-        from(
-            *configurations.runtimeClasspath.get()
-                .filter { it.exists() }
-                .map { zipTree(it) }
-                .toTypedArray()
-        )
-    }
+tasks.jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from(
+        *configurations.runtimeClasspath.get()
+            .filter { it.exists() }
+            .map { zipTree(it) }
+            .toTypedArray()
+    )
 }
 
 // Prevents conflicts by merging service files
-tasks {
-    shadowJar {
-        mergeServiceFiles()
-    }
+tasks.shadowJar {
+    mergeServiceFiles()
 }
+
 
 // Improves IntelliJ compatibility by avoiding unnecessary indexing issues
 tasks.buildSearchableOptions {
@@ -100,7 +101,7 @@ tasks.withType<Test> {
 // Ensures compatibility with specified IntelliJ versions
 tasks {
     patchPluginXml {
-        sinceBuild.set("233")
+        sinceBuild.set("243")
         untilBuild.set("243.*")
     }
 }
