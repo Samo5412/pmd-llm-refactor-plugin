@@ -4,6 +4,7 @@ import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
 import com.project.util.LoggerUtil;
 
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -51,7 +52,7 @@ public class ResponseFormatter {
         response.append("PMD Analysis Summary:\n");
 
         for (CodeBlockInfo info : blocksInfo) {
-            response.append("\nFile: ").append(info.filePath());
+            response.append("\nFile: ").append(getFileName(info.filePath()));
             response.append("\nBlock Type: ").append(info.blockType())
                     .append(" (Lines: ").append(info.startLine()).append("-").append(info.endLine()).append(")");
 
@@ -77,7 +78,7 @@ public class ResponseFormatter {
     private String formatGroupedEntry(CodeBlockInfo info) {
         StringBuilder sb = new StringBuilder();
         sb.append("    {\n");
-        sb.append("      \"file\": \"").append(escapeJson(info.filePath())).append("\",\n");
+        sb.append("      \"file\": \"").append(escapeJson(getFileName(info.filePath()))).append("\",\n");
         sb.append("      \"block_type\": \"").append(escapeJson(info.blockType())).append("\",\n");
         sb.append("      \"start_line\": ").append(info.startLine()).append(",\n");
         sb.append("      \"end_line\": ").append(info.endLine()).append(",\n");
@@ -105,5 +106,20 @@ public class ResponseFormatter {
      */
     private String escapeJson(String input) {
         return (input == null) ? "" : input.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /**
+     * Extracts the file name from a given file path.
+     *
+     * @param filePath The full path of the file.
+     * @return The name of the file without the directory path.
+     *
+     * @throws IllegalArgumentException If the provided file path is null or empty.
+     */
+    private String getFileName(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            throw new IllegalArgumentException("File path cannot be null or empty.");
+        }
+        return Paths.get(filePath).getFileName().toString();
     }
 }
