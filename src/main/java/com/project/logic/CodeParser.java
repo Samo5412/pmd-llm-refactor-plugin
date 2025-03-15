@@ -5,7 +5,6 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.expr.LambdaExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
@@ -184,10 +183,6 @@ public class CodeParser {
                 return bestNode(n, line, super.visit(n, line));
             }
 
-            @Override
-            public Node visit(BlockStmt n, Integer line) {
-                return bestNode(n, line, super.visit(n, line));
-            }
         }, line);
     }
 
@@ -221,7 +216,6 @@ public class CodeParser {
         if (node instanceof ClassOrInterfaceDeclaration) return "Class";
         if (node instanceof LambdaExpr) return "Lambda";
         if (node instanceof InitializerDeclaration) return "StaticBlock";
-        if (node instanceof BlockStmt) return "Block";
         return "Unknown";
     }
 }
