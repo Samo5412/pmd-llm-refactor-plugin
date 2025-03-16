@@ -60,26 +60,29 @@ public class ClassSummarizer {
      * This method summarizes a class by returning its signature and key method/field declarations.
      *
      * @param clazz The class to summarize.
-     * @param includeFields A flag indicating whether to include field declarations in the summary.
+     * @param includeMethods A flag indicating whether to include methods in the summary.
      * @return A summary string containing the class signature and key method/field declarations.
      */
-    private static String summarizeClassDetails(ClassOrInterfaceDeclaration clazz, boolean includeFields) {
+    private static String summarizeClassDetails(ClassOrInterfaceDeclaration clazz, boolean includeMethods) {
         String modifier = clazz.getAccessSpecifier().asString().trim();
         String className = clazz.getNameAsString();
         String superClass = clazz.getExtendedTypes().isEmpty() ? "" : " extends " + clazz.getExtendedTypes().get(0);
         String interfaces = clazz.getImplementedTypes().isEmpty() ? "" : " implements " +
                 clazz.getImplementedTypes().stream().map(NodeWithSimpleName::getNameAsString).collect(Collectors.joining(", "));
 
-        String methods = clazz.getMethods().stream()
+        // Keep method details as an alternative if needed later.
+        String methods = includeMethods ? clazz.getMethods().stream()
                 .map(ClassSummarizer::summarizeMethod)
-                .collect(Collectors.joining("\n    ", "\n  Methods:\n    ", ""));
+                .collect(Collectors.joining("\n    ", "\n  Methods:\n    ", "")) : "";
 
-        String fields = includeFields ? clazz.getFields().stream()
-                .map(f -> f.getElementType().asString() + " " + f.getVariables().stream()
-                        .map(NodeWithSimpleName::getNameAsString)
-                        .collect(Collectors.joining(", ")))
-                .collect(Collectors.joining("\n    ", "\n  Fields:\n    ", "")) : "";
+        String fields = clazz.getFields().isEmpty() ? "" :
+                clazz.getFields().stream()
+                        .map(f -> f.getElementType().asString() + " " + f.getVariables().stream()
+                                .map(NodeWithSimpleName::getNameAsString)
+                                .collect(Collectors.joining(", ")))
+                        .collect(Collectors.joining("\n    ", "\n  Fields:\n    ", ""));
 
-        return String.format("%s class %s%s%s {%s%s\n}", modifier, className, superClass, interfaces, fields, methods);
+
+        return String.format("%s class %s%s%s {%s\n}", modifier, className, superClass, interfaces, fields);
     }
 }
