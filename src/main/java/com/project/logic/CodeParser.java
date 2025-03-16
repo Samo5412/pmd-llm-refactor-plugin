@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /**
  * Extracts the smallest violated code block from a Java file.
@@ -53,36 +52,33 @@ public class CodeParser {
         try {
             CompilationUnit compilationUnit = parseJavaFile(filePath);
 
-            Optional<ClassOrInterfaceDeclaration> mainClass = compilationUnit.findFirst(ClassOrInterfaceDeclaration.class);
+            // Extract all class declarations in the file
+            List<ClassOrInterfaceDeclaration> classDeclarations = compilationUnit.findAll(ClassOrInterfaceDeclaration.class);
 
-            // Track if class info was already added via violations
-            boolean classInfoCaptured = mainClass
-                    .flatMap(ClassOrInterfaceDeclaration::getRange)
-                    .map(range ->
-                            violations.stream().anyMatch(v -> v.lineNumber() == range.begin.line)
-                    )
-                    .orElse(false);
-
+            // Track which classes already have a violation entry
+            List<Integer> classViolationLines = violations.stream()
+                    .map(Violation::lineNumber)
+                    .toList();
 
             var blockMap = groupViolationsByBlock(compilationUnit, filePath, violations);
             blocksInfo.addAll(blockMap.values());
 
-            // Add minimal class summary only if no class-level violation exists
-            mainClass.ifPresent(clazz ->
-                    clazz.getRange().ifPresent(range -> {
-                        if (!classInfoCaptured) {
-                            String classSummary = ClassSummarizer.summarizeClassMinimal(clazz);
-                            blocksInfo.add(0, new CodeBlockInfo(
-                                    filePath,
-                                    "Class",
-                                    range.begin.line,
-                                    range.end.line,
-                                    classSummary,
-                                    new ArrayList<>()
-                            ));
-                        }
-                    })
-            );
+            // Add minimal class summary for each class
+            for (ClassOrInterfaceDeclaration clazz : classDeclarations) {
+                clazz.getRange().ifPresent(range -> {
+                    if (!classViolationLines.contains(range.begin.line)) {
+                        String classSummary = ClassSummarizer.summarizeClassMinimal(clazz);
+                        blocksInfo.add(0, new CodeBlockInfo(
+                                filePath,
+                                "Class",
+                                range.begin.line,
+                                range.end.line,
+                                classSummary,
+                                new ArrayList<>()
+                        ));
+                    }
+                });
+            }
 
             LoggerUtil.info("Extracted " + blocksInfo.size() + " code blocks from " + filePath);
         } catch (Exception e) {
