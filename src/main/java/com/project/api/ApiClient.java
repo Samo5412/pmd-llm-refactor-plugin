@@ -2,7 +2,7 @@ package com.project.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.project.admin.AdminSettingsManager;
+import com.project.settings.SettingsManager;
 import com.project.exception.ApiRequestException;
 import com.project.exception.ApiResponseException;
 import com.project.exception.MissingAPIKeyException;
@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 public class ApiClient {
 
     /** Manages admin API key storage and retrieval */
-    private static AdminSettingsManager settingsManager = new AdminSettingsManager();
+    private static SettingsManager settingsManager = SettingsManager.getInstance();
 
     /** Flag indicating whether to use EnvLoader for API key retrieval */
     private static boolean useEnvLoader = true;
@@ -112,7 +112,7 @@ public class ApiClient {
      *
      * @param manager The AdminSettingsManager to be used.
      */
-    public static void setAdminSettingsManager(AdminSettingsManager manager) {
+    public static void setAdminSettingsManager(SettingsManager manager) {
         settingsManager = manager;
     }
 
