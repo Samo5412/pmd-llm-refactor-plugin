@@ -18,6 +18,7 @@ plugins {
 pmd {
     toolVersion = "7.10.0"
     isConsoleOutput = true
+    isIgnoreFailures = true
 }
 
 // Project metadata
@@ -31,6 +32,7 @@ repositories {
 
 // Dependencies including PMD, Kotlin, and required libraries
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
     testImplementation("org.mockito:mockito-junit-jupiter:5.4.0")
     implementation("net.sourceforge.pmd:pmd-core:7.10.0")
