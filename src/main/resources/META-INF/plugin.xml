@@ -23,7 +23,19 @@
                 secondary="false"
                 canCloseContents="false"
                 />
+
+        <applicationConfigurable instance="com.project.settings.SettingsConfiguration"
+                                 id="com.project.settings"
+                                 displayName="PMD-LLM-Refactor: Plugin Configuration"
+                                 groupId="Tools"
+        />
     </extensions>
+
+    <application-components>
+        <component>
+            <implementation-class>com.project.settings.SettingsManager</implementation-class>
+        </component>
+    </application-components>
 
     <actions>
         <!-- Plugin actions -->
