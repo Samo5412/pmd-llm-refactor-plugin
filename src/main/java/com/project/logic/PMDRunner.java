@@ -1,5 +1,6 @@
 package com.project.logic;
 
+import com.intellij.openapi.application.PathManager;
 import com.project.util.LoggerUtil;
 import net.sourceforge.pmd.PMDConfiguration;
 import net.sourceforge.pmd.PmdAnalysis;
@@ -7,9 +8,11 @@ import net.sourceforge.pmd.lang.java.JavaLanguageModule;
 import net.sourceforge.pmd.renderers.TextRenderer;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 
@@ -21,13 +24,15 @@ import java.nio.file.StandardCopyOption;
 public class PMDRunner {
 
     /** The file containing the PMD ruleset. */
-    private final File ruleSetFile;
+    private File ruleSetFile;
+    private static final String RULESET_FILE_NAME = "pmd_ruleset.xml";
+    private static final String RESOURCE_RULESET_PATH = "/config/pmd/pmd.xml";
 
     /**
      * Initializes PMDRunner and loads the ruleset file.
      */
     public PMDRunner() {
-        this.ruleSetFile = initializeRuleSetFile();
+        initializeRuleSetFile();
     }
 
     /**
@@ -36,18 +41,27 @@ public class PMDRunner {
      * @return The ruleset file.
      * @throws IllegalStateException If the file cannot be loaded.
      */
-    private File initializeRuleSetFile() {
-        try (InputStream inputStream = getClass().getResourceAsStream("/config/pmd/pmd.xml")) {
-            if (inputStream == null) {
-                throw new IllegalStateException("PMD ruleset file not found in resources.");
+    private void initializeRuleSetFile() {
+        Path configPath = Path.of(PathManager.getConfigPath(), "pmd", RULESET_FILE_NAME);
+        ruleSetFile = configPath.toFile();
+
+        try {
+            // Ensure the "pmd" directory exists in the config path
+            if (!ruleSetFile.getParentFile().exists()) {
+                ruleSetFile.getParentFile().mkdirs();
             }
 
-            File tempFile = File.createTempFile("pmd-ruleset", ".xml");
-            tempFile.deleteOnExit();
-            Files.copy(inputStream, tempFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            return tempFile;
-        } catch (Exception e) {
-            throw new IllegalStateException("Error loading PMD ruleset file from resources.", e);
+            // if the ruleset file does not exist in the config directory, copy it from resources
+            if (!ruleSetFile.exists()) {
+                try (InputStream inputStream = PMDRunner.class.getResourceAsStream(RESOURCE_RULESET_PATH)) {
+                    if (inputStream == null) {
+                        throw new IllegalStateException("PMD ruleset file not found in resources.");
+                    }
+                    Files.copy(inputStream, configPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Error setting up PMD ruleset file.", e);
         }
     }
 
