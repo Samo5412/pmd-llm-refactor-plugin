@@ -1,10 +1,15 @@
 package com.project.logic;
 
+import com.project.logic.refactoring.RefactoringObjectiveProvider;
 import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
 import com.project.util.LoggerUtil;
 
+import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -23,18 +28,72 @@ public class ResponseFormatter {
      * @return A formatted JSON string representing the API payload.
      */
     public String formatApiResponse(List<CodeBlockInfo> blocksInfo) {
-        StringBuilder response = new StringBuilder("{\n  \"PMD Analysis Results\": [\n");
+        if (blocksInfo.isEmpty()) return "[]";
 
-        List<String> groupedResults = blocksInfo.stream()
-                .map(this::formatGroupedEntry)
+        // Get file name
+        String fileName = getFileName(blocksInfo.get(0).filePath());
+
+        // Extract class signatures
+        List<ClassInfo> classInfos = blocksInfo.stream()
+                .filter(block -> "Class".equals(block.blockType()))
+                .map(block -> new ClassInfo(block.codeSnippet(), block.startLine(), block.endLine()))
                 .collect(Collectors.toList());
 
-        response.append(String.join(",\n", groupedResults));
+        // Group violations under their class
+        Map<ClassInfo, List<CodeBlockInfo>> violationsByClass = blocksInfo.stream()
+                .filter(block -> !"Class".equals(block.blockType()))
+                .collect(Collectors.groupingBy(block -> findContainingClass(block, classInfos)));
+
+        // Build JSON response
+        StringBuilder response = new StringBuilder("{\n");
+        response.append("  \"instruction\": \"")
+                .append(escapeJson(RefactoringObjectiveProvider.getLLMInstruction())).append("\",\n");
+        response.append("  \"file\": \"").append(escapeJson(fileName)).append("\",\n");
+        response.append("  \"classes\": [\n");
+
+        boolean firstClass = true;
+        for (ClassInfo classInfo : classInfos) {
+            if (!firstClass) response.append(",\n");
+            firstClass = false;
+
+            response.append("    {\n");
+            response.append("      \"type_signature\": \"").append(escapeJson(classInfo.signature())).append("\",\n");
+            response.append("      \"violations\": [\n");
+
+            List<CodeBlockInfo> violations = violationsByClass.getOrDefault(classInfo, List.of());
+            String violationsJson = violations.stream()
+                    .map(this::formatGroupedEntry)
+                    .collect(Collectors.joining(",\n"));
+
+            response.append(violationsJson);
+            response.append("\n      ]\n");
+            response.append("    }");
+        }
+
         response.append("\n  ]\n}");
 
-        LoggerUtil.info("Generated API JSON response with " + blocksInfo.size() + " code blocks.");
+        LoggerUtil.info("Generated API JSON response for file: " + fileName);
         return response.toString();
     }
+
+    /**
+     * Finds the correct class for a given violation block based on its start line.
+     *
+     * @param block The violation block.
+     * @param classInfos The list of detected classes.
+     * @return The class that contains the given block.
+     */
+    private ClassInfo findContainingClass(CodeBlockInfo block, List<ClassInfo> classInfos) {
+        return classInfos.stream()
+                .filter(classInfo -> block.startLine() >= classInfo.startLine() && block.startLine() <= classInfo.endLine())
+                .findFirst()
+                .orElse(new ClassInfo("Unknown", -1, -1));
+    }
+
+    /**
+     * Class to store class signature and its range.
+     */
+    private record ClassInfo(String signature, int startLine, int endLine) {}
 
     /**
      * Formats extracted violations into a user-friendly summary message.
@@ -48,23 +107,50 @@ public class ResponseFormatter {
         }
 
         StringBuilder response = new StringBuilder();
-        response.append("PMD Analysis Summary:\n");
+        String fileName = getFileName(blocksInfo.get(0).filePath());
+        response.append("PMD Analysis Summary for file: ").append(fileName).append("\n");
 
-        for (CodeBlockInfo info : blocksInfo) {
-            response.append("\nFile: ").append(info.filePath());
-            response.append("\nBlock Type: ").append(info.blockType())
-                    .append(" (Lines: ").append(info.startLine()).append("-").append(info.endLine()).append(")");
+        // Extract all top-level type declarations (classes, interfaces, etc.)
+        List<ClassInfo> typeInfos = blocksInfo.stream()
+                .filter(b -> "Class".equals(b.blockType()))
+                .map(b -> new ClassInfo(b.codeSnippet(), b.startLine(), b.endLine()))
+                .sorted(Comparator.comparingInt(ClassInfo::startLine))
+                .toList();
 
-            response.append("\nViolations:");
-            for (Violation violation : info.violations()) {
-                response.append("\n  - Line ").append(violation.lineNumber()).append(": ")
-                        .append(violation.ruleName()).append(" - ")
-                        .append(violation.message());
+
+        // Gather all violation blocks
+        List<CodeBlockInfo> violationBlocks = blocksInfo.stream()
+                .filter(b -> !"Class".equals(b.blockType()))
+                .toList();
+
+        // Process each type separately
+        for (ClassInfo typeInfo : typeInfos) {
+            response.append("\nType Signature: ").append(typeInfo.signature())
+                    .append(" (Lines ").append(typeInfo.startLine())
+                    .append("-").append(typeInfo.endLine()).append(")\n");
+
+            // Filter violations that belong to this type
+            List<CodeBlockInfo> typeViolations = violationBlocks.stream()
+                    .filter(v -> v.startLine() >= typeInfo.startLine() && v.endLine() <= typeInfo.endLine())
+                    .toList();
+
+            if (typeViolations.isEmpty()) {
+                response.append("  No violations detected in this type.\n");
+            } else {
+                for (CodeBlockInfo violationBlock : typeViolations) {
+                    response.append("\n  ").append(violationBlock.blockType())
+                            .append(" (Lines ").append(violationBlock.startLine())
+                            .append("-").append(violationBlock.endLine()).append(")\n");
+
+                    for (Violation violation : violationBlock.violations()) {
+                        response.append("    - ").append(violation.ruleName()).append(": ")
+                                .append(violation.message()).append("\n");
+                    }
+                }
             }
-            response.append("\n");
         }
 
-        LoggerUtil.info("Generated user-friendly response with " + blocksInfo.size() + " violations.");
+        LoggerUtil.info("Generated structured user-friendly PMD analysis summary for file: " + fileName);
         return response.toString();
     }
 
@@ -77,22 +163,28 @@ public class ResponseFormatter {
     private String formatGroupedEntry(CodeBlockInfo info) {
         StringBuilder sb = new StringBuilder();
         sb.append("    {\n");
-        sb.append("      \"file\": \"").append(escapeJson(info.filePath())).append("\",\n");
         sb.append("      \"block_type\": \"").append(escapeJson(info.blockType())).append("\",\n");
-        sb.append("      \"start_line\": ").append(info.startLine()).append(",\n");
-        sb.append("      \"end_line\": ").append(info.endLine()).append(",\n");
         sb.append("      \"extracted_code\": \"").append(escapeJson(info.codeSnippet())).append("\",\n");
-        sb.append("      \"violations\": [\n");
+        sb.append("      \"issues\": [\n");
+
+        // Extract all rule names to generate a combined refactoring objective
+        Set<String> ruleNames = info.violations().stream()
+                .map(Violation::ruleName)
+                .collect(Collectors.toSet());
 
         String violationsJson = info.violations().stream()
-                .map(violation -> String.format("        {\n          \"line\": %d,\n          \"rule\": \"%s\",\n          \"message\": \"%s\"\n        }",
-                        violation.lineNumber(),
+                .map(violation -> String.format("        {\n          \"rule\": \"%s\",\n          \"message\": \"%s\"\n        }",
                         escapeJson(violation.ruleName()),
                         escapeJson(violation.message())))
                 .collect(Collectors.joining(",\n"));
 
         sb.append(violationsJson);
-        sb.append("\n      ]\n    }");
+        sb.append("\n      ],\n");
+
+        // Add refactoring objective based on detected violations
+        sb.append("      \"refactoring_objective\": \"")
+                .append(escapeJson(RefactoringObjectiveProvider.getRefactoringObjective(ruleNames)))
+                .append("\"\n    }");
 
         return sb.toString();
     }
@@ -105,5 +197,20 @@ public class ResponseFormatter {
      */
     private String escapeJson(String input) {
         return (input == null) ? "" : input.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    /**
+     * Extracts the file name from a given file path.
+     *
+     * @param filePath The full path of the file.
+     * @return The name of the file without the directory path.
+     *
+     * @throws IllegalArgumentException If the provided file path is null or empty.
+     */
+    private String getFileName(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            throw new IllegalArgumentException("File path cannot be null or empty.");
+        }
+        return Paths.get(filePath).getFileName().toString();
     }
 }

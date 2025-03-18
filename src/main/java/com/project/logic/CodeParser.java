@@ -5,8 +5,6 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.expr.LambdaExpr;
-import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
-import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
 import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
@@ -17,7 +15,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Extracts the smallest violated code block from a Java file.
@@ -54,9 +51,35 @@ public class CodeParser {
 
         try {
             CompilationUnit compilationUnit = parseJavaFile(filePath);
-            var blockMap = groupViolationsByBlock(compilationUnit, filePath, violations);
 
+            // Extract all class declarations in the file
+            List<ClassOrInterfaceDeclaration> classDeclarations = compilationUnit.findAll(ClassOrInterfaceDeclaration.class);
+
+            // Track which classes already have a violation entry
+            List<Integer> classViolationLines = violations.stream()
+                    .map(Violation::lineNumber)
+                    .toList();
+
+            var blockMap = groupViolationsByBlock(compilationUnit, filePath, violations);
             blocksInfo.addAll(blockMap.values());
+
+            // Add minimal class summary for each class
+            for (ClassOrInterfaceDeclaration clazz : classDeclarations) {
+                clazz.getRange().ifPresent(range -> {
+                    if (!classViolationLines.contains(range.begin.line)) {
+                        String classSummary = ClassSummarizer.summarizeClassMinimal(clazz);
+                        blocksInfo.add(0, new CodeBlockInfo(
+                                filePath,
+                                "Class",
+                                range.begin.line,
+                                range.end.line,
+                                classSummary,
+                                new ArrayList<>()
+                        ));
+                    }
+                });
+            }
+
             LoggerUtil.info("Extracted " + blocksInfo.size() + " code blocks from " + filePath);
         } catch (Exception e) {
             LoggerUtil.error("Error processing JavaParser for file " + filePath, e);
@@ -102,7 +125,7 @@ public class CodeParser {
 
                 // summarize instead of returning the full body.
                 if (block instanceof ClassOrInterfaceDeclaration) {
-                    snippet = summarizeClass((ClassOrInterfaceDeclaration) block);
+                    snippet = ClassSummarizer.summarizeClass((ClassOrInterfaceDeclaration) block);
                 } else {
                     snippet = block.toString();
                 }
@@ -126,7 +149,6 @@ public class CodeParser {
 
         return blockMap;
     }
-
 
     /**
      * Finds the smallest enclosing block that contains the given violation line.
@@ -157,13 +179,8 @@ public class CodeParser {
                 return bestNode(n, line, super.visit(n, line));
             }
 
-            @Override
-            public Node visit(BlockStmt n, Integer line) {
-                return bestNode(n, line, super.visit(n, line));
-            }
         }, line);
     }
-
 
     /**
      * Determines the smallest suitable node that contains the violation line.
@@ -185,7 +202,6 @@ public class CodeParser {
         return candidateSize < bestSize ? candidate : currentBest;
     }
 
-
     /**
      * Determines the block type of the given node.
      * @param node The node to analyze.
@@ -196,47 +212,6 @@ public class CodeParser {
         if (node instanceof ClassOrInterfaceDeclaration) return "Class";
         if (node instanceof LambdaExpr) return "Lambda";
         if (node instanceof InitializerDeclaration) return "StaticBlock";
-        if (node instanceof BlockStmt) return "Block";
         return "Unknown";
-    }
-
-    /**
-     * Summarizes a class by returning its signature and key method/field declarations.
-     *
-     * @param clazz The class to summarize.
-     * @return A summary string containing the class signature and key method/field declarations.
-     */
-    private String summarizeClass(ClassOrInterfaceDeclaration clazz) {
-        String fields = clazz.getFields().stream()
-                .map(f -> f.getElementType().asString() + " " + f.getVariables().stream()
-                        .map(NodeWithSimpleName::getNameAsString)
-                        .collect(Collectors.joining(", ")))
-                .collect(Collectors.joining("\n    ", "\n  Fields:\n    ", ""));
-
-        String methods = clazz.getMethods().stream()
-                .map(this::summarizeMethod)
-                .collect(Collectors.joining("\n    ", "\n  Methods:\n    ", ""));
-
-        return String.format("%s class %s {%s%s\n}",
-                clazz.getAccessSpecifier().asString().trim(),
-                clazz.getNameAsString(),
-                fields.isBlank() ? "" : fields,
-                methods.isBlank() ? "" : methods
-        );
-    }
-
-    /**
-     * Summarizes a method by returning its signature.
-     *
-     * @param method The MethodDeclaration object representing the method to summarize.
-     * @return The signature of the method as a string.
-     */
-    private String summarizeMethod(MethodDeclaration method) {
-        String modifiers = method.getModifiers().stream().map(Object::toString).collect(Collectors.joining(" ")).trim();
-        String params = method.getParameters().stream()
-                .map(p -> p.getType().asString() + " " + p.getNameAsString())
-                .collect(Collectors.joining(", "));
-
-        return String.format("%s %s %s(%s)", modifiers, method.getType().asString(), method.getNameAsString(), params).trim();
     }
 }
