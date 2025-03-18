@@ -1,6 +1,6 @@
 package com.project.api;
 
-import com.project.admin.AdminSettingsManager;
+import com.project.settings.SettingsManager;
 import com.project.exception.ApiResponseException;
 import com.project.exception.MissingAPIKeyException;
 import org.junit.jupiter.api.AfterEach;
@@ -30,15 +30,15 @@ public class ApiClientTest {
     }
 
     /**
-     * Tests API key retrieval from {@link AdminSettingsManager}.
+     * Tests API key retrieval from {@link SettingsManager}.
      * Verifies that the stored key is correctly retrieved.
      */
     @Test
     void testGetApiKey_FromAdminSettingsManager() {
-        AdminSettingsManager adminSettingsManager = new AdminSettingsManager();
-        adminSettingsManager.setApiKey("test-admin-api-key");
+        SettingsManager settingsManager = SettingsManager.getInstance();
+        settingsManager.setApiKey("test-admin-api-key");
 
-        ApiClient.setAdminSettingsManager(adminSettingsManager);
+        ApiClient.setAdminSettingsManager(settingsManager);
         ApiClient.setUseEnvLoader(false);
 
         String apiKey = ApiClient.getApiKey();
@@ -53,9 +53,9 @@ public class ApiClientTest {
     @Test
     void testMissingApiKey_FromAdminSettingsManager() {
         ApiClient.setUseEnvLoader(false);
-        AdminSettingsManager adminSettingsManager = new AdminSettingsManager();
+        SettingsManager settingsManager = SettingsManager.getInstance();
 
-        adminSettingsManager.resetSettings();
+        settingsManager.resetApiInfo();
 
         assertThrows(MissingAPIKeyException.class, ApiClient::getApiKey);
     }
