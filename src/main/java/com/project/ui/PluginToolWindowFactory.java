@@ -85,6 +85,8 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         buttonPanel.add(pmdButton);
         panel.add(buttonPanel, BorderLayout.SOUTH);
 
+        panel.add(UserFeedback.createFeedbackPanel(), BorderLayout.SOUTH);
+
         updateFileStatus(project);
 
         return panel;
@@ -141,4 +143,4 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
             statusLabel.setText("PMD Analysis completed!");
         });
     }
-}
+    }
