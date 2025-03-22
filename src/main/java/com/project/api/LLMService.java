@@ -32,7 +32,10 @@ public class LLMService {
             // Build API request payload
             String requestPayload = ApiRequestBuilder.buildRequest(prompt, model, maxTokens, temperature);
 
-            // Send request to OpenRouter API
+            // Store the prompt in PromptStorage
+            PromptStorage.setLastPrompt(prompt);
+
+            // Send the request and handle the response
             JsonNode jsonResponse = ApiClient.sendPostRequest(requestPayload);
 
             // Extract and return AI-generated text
