@@ -70,6 +70,8 @@ public class UserFeedback {
         feedbackPanel.add(buttonPanel);
         feedbackPanel.add(emailPanel);
 
+        feedbackPanel.setVisible(false);
+
         return feedbackPanel;
     }
 
