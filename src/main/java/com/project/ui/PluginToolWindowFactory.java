@@ -39,6 +39,11 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     private JButton pmdButton;
 
     /**
+     * Panel to display feedback buttons
+     */
+    private JPanel feedbackPanel;
+
+    /**
      * Initializes the tool window UI and registers event listeners.
      *
      * @param project    The current IntelliJ project.
@@ -83,9 +88,14 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
 
         JPanel buttonPanel = new JPanel();
         buttonPanel.add(pmdButton);
-        panel.add(buttonPanel, BorderLayout.SOUTH);
 
-        panel.add(UserFeedback.createFeedbackPanel(), BorderLayout.SOUTH);
+        feedbackPanel = UserFeedback.createFeedbackPanel();
+
+        JPanel southPanel = new JPanel(new BorderLayout());
+        southPanel.add(buttonPanel, BorderLayout.NORTH);
+        southPanel.add(feedbackPanel, BorderLayout.SOUTH);
+
+        panel.add(southPanel, BorderLayout.SOUTH);
 
         updateFileStatus(project);
 
@@ -114,6 +124,7 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     private void setFileStatus(String statusMessage, boolean isEnabled) {
         statusLabel.setText(statusMessage);
         pmdButton.setEnabled(isEnabled);
+        feedbackPanel.setVisible(false);
     }
 
     /**
@@ -141,6 +152,8 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
             String result = pmdAnalyzer.analyzeFile(project, file);
             resultTextArea.setText(result);
             statusLabel.setText("PMD Analysis completed!");
+
+            feedbackPanel.setVisible(true);
         });
     }
     }
