@@ -25,7 +25,11 @@ public class PMDRunner {
 
     /** The file containing the PMD ruleset. */
     private File ruleSetFile;
+
+    /** The name of the PMD ruleset file. */
     private static final String RULESET_FILE_NAME = "pmd_ruleset.xml";
+
+    /** The path to the PMD ruleset file in resources. */
     private static final String RESOURCE_RULESET_PATH = "/config/pmd/pmd.xml";
 
     /**
@@ -38,7 +42,6 @@ public class PMDRunner {
     /**
      * Loads the PMD ruleset file from resources into a temporary file.
      *
-     * @return The ruleset file.
      * @throws IllegalStateException If the file cannot be loaded.
      */
     private void initializeRuleSetFile() {
