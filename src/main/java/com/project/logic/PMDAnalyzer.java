@@ -68,27 +68,7 @@ public class PMDAnalyzer {
         List<CodeBlockInfo> allBlocks = codeParser.extractViolatedBlocksInfo(filePath, violations);
 
         // Generate full analysis summary
-        String userMessage = responseFormatter.formatUserResponse(allBlocks);
-
-        // Prepare LLM-compatible batches
-        BatchPreparationResult result = PromptBatchTrimmer.splitIntoBatches(allBlocks);
-
-        LoggerUtil.info("Batching Summary: " + result.userMessage());
-
-        List<List<CodeBlockInfo>> batches = result.batches();
-        for (int i = 0; i < batches.size(); i++) {
-            List<CodeBlockInfo> batch = batches.get(i);
-            LoggerUtil.info("Prepared batch " + (i + 1) + " of " + batches.size());
-
-            String jsonResponse = responseFormatter.formatApiResponse(batch);
-            LoggerUtil.info("Generated API JSON response for batch " + (i + 1) + ":\n" + jsonResponse);
-        }
-
-        if (!result.skippedBlocks().isEmpty()) {
-            LoggerUtil.warn("Skipped blocks due to size: " + result.skippedBlocks().size());
-        }
-
-        return userMessage;
+        return responseFormatter.formatUserResponse(allBlocks);
     }
 
     /**
