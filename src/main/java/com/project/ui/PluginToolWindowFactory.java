@@ -19,8 +19,13 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
+import com.project.api.ApiClient;
+import com.project.api.LLMService;
 import com.project.logic.*;
 import com.project.model.BatchPreparationResult;
+import com.project.model.CodeBlockInfo;
+import com.project.settings.SettingsManager;
+import com.project.util.LoggerUtil;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
@@ -290,12 +295,74 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
      */
     private void updateButtonForLLMResponse(Project project) {
         pmdButton.setText("Get LLM Response");
-        for (var listener : pmdButton.getActionListeners()) {
-            pmdButton.removeActionListener(listener);
-        }
-        pmdButton.addActionListener(e -> showLLMProcessingDialog(project));
+        pmdButton.setEnabled(true);
+
+        pmdButton.addActionListener(e -> {
+            try {
+                // Show loading dialog
+                showLLMProcessingDialog(project);
+
+                configureApiClient();
+
+                String formattedPrompt = createFormattedPrompt();
+
+                // Define model and parameters
+                String model = "deepseek/deepseek-chat:free";
+                int maxTokens = 1000;
+                double temperature = 0.7;
+
+                // Get LLM response
+                String llmResponse = LLMService.getLLMResponse(formattedPrompt, model, maxTokens, temperature);
+                LoggerUtil.info("LLM response: " + llmResponse);
+
+                // Reset button for new analysis
+                resetToAnalyzeMode(project);
+
+            } catch (Exception ex) {
+                handleUpdateButtonForLLMResponseError(ex);
+            }
+        });
     }
 
+    /**
+     * Configures the API client to use settings manager instead of environment variables.
+     *
+     * @throws Exception if an unexpected error occurs during configuration
+     */
+    private void configureApiClient() throws Exception {
+        try {
+            SettingsManager settingsManager = SettingsManager.getInstance();
+            ApiClient.setUseEnvLoader(false);
+            ApiClient.setAdminSettingsManager(settingsManager);
+        } catch (Exception ex) {
+            ApiClient.setUseEnvLoader(false);
+        }
+    }
+
+    /**
+     * Creates a formatted prompt for the LLM API request.
+     *
+     * @return The formatted prompt string
+     */
+    private String createFormattedPrompt() {
+        if (!lastBatchResult.batches().isEmpty()) {
+            java.util.List<CodeBlockInfo> firstBatch = lastBatchResult.batches().get(0);
+            ResponseFormatter formatter = new ResponseFormatter();
+            return formatter.formatApiResponse(firstBatch);
+        }
+        return "";
+    }
+
+    /**
+     * Handles errors that occur during LLM response retrieval.
+     *
+     * @param ex The exception that occurred
+     */
+    private void handleUpdateButtonForLLMResponseError(Exception ex) {
+        String errorMessage = "Error getting LLM response: " + ex.getMessage();
+        updateAnalysisResults(errorMessage);
+        LoggerUtil.error(errorMessage, ex);
+    }
     /**
      * Shows a dialog while processing LLM requests.
      *
