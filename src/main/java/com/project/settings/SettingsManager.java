@@ -4,6 +4,7 @@ import com.intellij.credentialStore.CredentialAttributes;
 import com.intellij.credentialStore.Credentials;
 import com.intellij.ide.passwordSafe.PasswordSafe;
 import com.intellij.openapi.application.PathManager;
+import com.project.util.LoggerUtil;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -57,16 +58,22 @@ public class SettingsManager {
 
     /**
      * Retrieves the stored API URL.
-     * @return the API URL.
+     * @return the API URL or null if not set.
      */
     public String getApiUrl() {
         Path configPath = Path.of(PathManager.getConfigPath(), "pmd", API_URL_FILE_NAME);
         try {
-            return Files.readString(configPath).trim();
+            if (Files.exists(configPath)) {
+                return Files.readString(configPath).trim();
+            }
+            return null;
         } catch (IOException e) {
-            throw new IllegalStateException("Error reading API URL file.", e);
+            LoggerUtil.error("Error reading API URL file.", e);
+            return null;
         }
     }
+
+
 
     /**
      * Stores the given API URL.
@@ -89,14 +96,18 @@ public class SettingsManager {
 
     /**
      * Retrieves the stored PMD ruleset.
-     * @return the PMD ruleset.
+     * @return the PMD ruleset or null if not set.
      */
     public String getRuleset() {
         Path configPath = Path.of(PathManager.getConfigPath(), "pmd", RULESET_FILE_NAME);
         try {
-            return Files.readString(configPath);
+            if (Files.exists(configPath)) {
+                return Files.readString(configPath);
+            }
+            return null;
         } catch (IOException e) {
-            throw new IllegalStateException("Error reading PMD ruleset file.", e);
+            LoggerUtil.error("Error reading PMD ruleset file." , e);
+            return null;
         }
     }
 
