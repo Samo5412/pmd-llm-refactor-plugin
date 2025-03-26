@@ -27,7 +27,7 @@
         <applicationConfigurable instance="com.project.settings.SettingsConfiguration"
                                  id="com.project.settings"
                                  displayName="PMD-LLM-Refactor: Plugin Configuration"
-                                 groupId="Tools"
+                                 groupId="tools"
         />
     </extensions>
 
