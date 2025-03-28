@@ -1,6 +1,10 @@
 package com.project.ui;
 
 import com.github.javaparser.JavaParser;
+import com.intellij.diff.DiffContentFactory;
+import com.intellij.diff.DiffManager;
+import com.intellij.diff.contents.DocumentContent;
+import com.intellij.diff.requests.SimpleDiffRequest;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.EditorFactory;
@@ -10,21 +14,27 @@ import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
 import com.intellij.openapi.fileEditor.FileEditorManagerListener;
+import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiManager;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.project.logic.*;
 import com.project.model.BatchPreparationResult;
+import com.project.util.LoggerUtil;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -48,6 +58,11 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     private JTextArea resultTextArea;
 
     /**
+     * Text area to display the LLM response.
+     */
+    private JTextArea llmResponseTextArea;
+
+    /**
      * Button to trigger PMD code analysis
      */
     private JButton pmdButton;
@@ -67,6 +82,12 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
      * Key: File path, Value: true if issues were found, false otherwise
      */
     private final Map<String, Boolean> analyzedFilesCache = new HashMap<>();
+
+    /**
+     * Button to copy the LLM response to the clipboard
+     */
+    private JButton copyToClipboardButton;
+
 
     /**
      * Initializes the tool window UI and registers event listeners.
@@ -136,22 +157,49 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         statusLabel = new JBLabel("Detecting file...");
         panel.add(statusLabel, BorderLayout.NORTH);
 
+        // Text area for PMD analysis results
         resultTextArea = new JTextArea(10, 40);
         resultTextArea.setEditable(false);
-        JScrollPane scrollPane = new JBScrollPane(resultTextArea);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        JScrollPane resultScrollPane = new JBScrollPane(resultTextArea);
+        panel.add(resultScrollPane, BorderLayout.CENTER);
 
+        // Text area for LLM response, initially hidden in a split view
+        llmResponseTextArea = new JTextArea(10, 40);
+        llmResponseTextArea.setEditable(false);
+        JScrollPane llmResponseScrollPane = new JBScrollPane(llmResponseTextArea);
+
+        //  LLM response panel
+        JPanel llmResponsePanel = new JPanel(new BorderLayout());
+        JLabel llmResponseLabel = new JLabel("LLM response");
+        llmResponsePanel.add(llmResponseLabel, BorderLayout.NORTH);
+        llmResponsePanel.add(llmResponseScrollPane, BorderLayout.CENTER);
+
+        JLayeredPane layeredPane = new JLayeredPane();
+        layeredPane.setLayout(new BorderLayout());
+        layeredPane.add(llmResponsePanel, BorderLayout.CENTER);
+
+        // Clipboard button
+        copyToClipboardButton = createCopyToClipboardButton();
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.add(copyToClipboardButton);
+        layeredPane.add(buttonPanel, BorderLayout.NORTH);
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, resultScrollPane, layeredPane);
+        splitPane.setResizeWeight(0.5);
+        panel.add(splitPane, BorderLayout.CENTER);
+
+        // Button and feedback panels
         pmdButton = new JButton("Analyse Code");
         pmdButton.setEnabled(false);  // Initially disabled
         pmdButton.addActionListener(e -> runPMDAnalysis(project));
 
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.add(pmdButton);
+        JPanel buttonPanelBottom = new JPanel();
+        buttonPanelBottom.add(pmdButton);
 
         feedbackPanel = UserFeedback.createFeedbackPanel();
 
         JPanel southPanel = new JPanel(new BorderLayout());
-        southPanel.add(buttonPanel, BorderLayout.NORTH);
+        southPanel.add(buttonPanelBottom, BorderLayout.NORTH);
         southPanel.add(feedbackPanel, BorderLayout.SOUTH);
 
         panel.add(southPanel, BorderLayout.SOUTH);
@@ -159,6 +207,21 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         updateFileStatus(project);
 
         return panel;
+    }
+
+    /**
+     * Creates a button to copy the LLM response to the clipboard.
+     * @return The configured JButton for copying to clipboard.
+     */
+    private JButton createCopyToClipboardButton() {
+        copyToClipboardButton = new JButton("Copy to Clipboard");
+        copyToClipboardButton.addActionListener(e -> {
+            String llmResponseText = llmResponseTextArea.getText();
+            StringSelection stringSelection = new StringSelection(llmResponseText);
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(stringSelection, null);
+        });
+        return copyToClipboardButton;
     }
 
     /**
@@ -306,8 +369,19 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
 
         SwingWorker<Void, Void> worker = new SwingWorker<>() {
             @Override
-            protected Void doInBackground() throws Exception {
-                Thread.sleep(2000); // Simulate processing
+            protected Void doInBackground() {
+                try {
+                    String llmResponse = "public class HelloWorld {\n" + // TODO: Replace with actual LLM response
+                            "    public static void main(String[] args) {\n" +
+                            "        System.out.println(\"Hello, World!\");\n" +
+                            "    }\n" +
+                            "}";
+                    LoggerUtil.info("LLM response received: " + llmResponse);
+
+                    SwingUtilities.invokeLater(() -> displayLLMResponse(project, llmResponse));
+                } catch (Exception e) {
+                    LoggerUtil.error("Error processing LLM response: " + e.getMessage(), e);
+                }
                 return null;
             }
 
@@ -318,9 +392,63 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
                 resetToAnalyzeMode(project);
             }
         };
-
+        LoggerUtil.info("Executing SwingWorker");
         worker.execute();
         loadingDialog.setVisible(true);
+    }
+
+    /**
+     * Displays the LLM response in the text area and shows the diff view.
+     * @param project The current IntelliJ project.
+     * @param llmResponse The LLM response to display.
+     */
+    private void displayLLMResponse(Project project, String llmResponse) {
+        try {
+            Optional<VirtualFile> currentFileOpt = FileDetector.detectCurrentJavaFile(project);
+            if (currentFileOpt.isPresent()) {
+                VirtualFile currentFile = currentFileOpt.get();
+                Document document = FileDocumentManager.getInstance().getDocument(currentFile);
+                if (document != null) {
+                    openDiffView(project, currentFile, document.getText(), llmResponse);
+                }
+            }
+            llmResponseTextArea.setText(llmResponse);
+            llmResponseTextArea.setCaretPosition(0);
+        } catch (Exception e) {
+            LoggerUtil.error("Error displaying LLM response: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Opens a diff view to compare the original code with the LLM refactored code.
+     * @param project The current IntelliJ project.
+     * @param currentFile The current file being analyzed.
+     * @param orgDocument The original document text.
+     * @param llmResponse The LLM refactored code.
+     */
+    private void openDiffView(Project project, VirtualFile currentFile, String orgDocument, String llmResponse) {
+        try {
+            Document llmDocument = EditorFactory.getInstance().createDocument(llmResponse);
+
+            PsiFile psiFile = PsiManager.getInstance(project).findFile(currentFile);
+            FileType fileType = psiFile != null ? psiFile.getFileType() : currentFile.getFileType();
+
+            DocumentContent originalContent =
+                    DiffContentFactory.getInstance().create(project, orgDocument, fileType);
+            DocumentContent modifiedContent =
+                    DiffContentFactory.getInstance().create(project, llmDocument, fileType);
+
+            SimpleDiffRequest diffRequest = new SimpleDiffRequest(
+                    "Code Refactoring - Before and After",
+                    originalContent,
+                    modifiedContent,
+                    "Original code",
+                    "LLM suggestions"
+            );
+            DiffManager.getInstance().showDiff(project, diffRequest);
+        } catch (Exception e) {
+            LoggerUtil.error("Error opening diff view: " + e.getMessage(), e);
+        }
     }
 
     /**
