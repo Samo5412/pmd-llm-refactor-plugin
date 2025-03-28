@@ -157,18 +157,46 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         statusLabel = new JBLabel("Detecting file...");
         panel.add(statusLabel, BorderLayout.NORTH);
 
-        // Text area for PMD analysis results
+        JScrollPane resultScrollPane = createResultScrollPane();
+        JScrollPane llmResponseScrollPane = createLLMResponseScrollPane();
+        JSplitPane splitPane = createSplitPane(resultScrollPane, llmResponseScrollPane);
+        panel.add(splitPane, BorderLayout.CENTER);
+
+        JPanel southPanel = createSouthPanel(project);
+        panel.add(southPanel, BorderLayout.SOUTH);
+
+        updateFileStatus(project);
+
+        return panel;
+    }
+
+    /**
+     * Creates and returns a scroll pane for displaying PMD analysis results.
+     * @return The initialized JScrollPane for PMD results.
+     */
+    private JScrollPane createResultScrollPane() {
         resultTextArea = new JTextArea(10, 40);
         resultTextArea.setEditable(false);
-        JScrollPane resultScrollPane = new JBScrollPane(resultTextArea);
-        panel.add(resultScrollPane, BorderLayout.CENTER);
+        return new JBScrollPane(resultTextArea);
+    }
 
-        // Text area for LLM response, initially hidden in a split view
+    /**
+     * Creates and returns a scroll pane for displaying LLM responses.
+     * @return The initialized JScrollPane for LLM responses.
+     */
+    private JScrollPane createLLMResponseScrollPane() {
         llmResponseTextArea = new JTextArea(10, 40);
         llmResponseTextArea.setEditable(false);
-        JScrollPane llmResponseScrollPane = new JBScrollPane(llmResponseTextArea);
+        return new JBScrollPane(llmResponseTextArea);
+    }
 
-        //  LLM response panel
+    /**
+     * Creates and returns a split pane containing the result and LLM response scroll panes.
+     * @param resultScrollPane The scroll pane for PMD results.
+     * @param llmResponseScrollPane The scroll pane for LLM responses.
+     * @return The initialized JSplitPane.
+     */
+    private JSplitPane createSplitPane(JScrollPane resultScrollPane, JScrollPane llmResponseScrollPane) {
         JPanel llmResponsePanel = new JPanel(new BorderLayout());
         JLabel llmResponseLabel = new JLabel("LLM response");
         llmResponsePanel.add(llmResponseLabel, BorderLayout.NORTH);
@@ -178,7 +206,6 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         layeredPane.setLayout(new BorderLayout());
         layeredPane.add(llmResponsePanel, BorderLayout.CENTER);
 
-        // Clipboard button
         copyToClipboardButton = createCopyToClipboardButton();
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         buttonPanel.add(copyToClipboardButton);
@@ -186,9 +213,15 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, resultScrollPane, layeredPane);
         splitPane.setResizeWeight(0.5);
-        panel.add(splitPane, BorderLayout.CENTER);
+        return splitPane;
+    }
 
-        // Button and feedback panels
+    /**
+     * Creates and returns the south panel containing the analyze button and feedback panel.
+     * @param project The current IntelliJ project.
+     * @return The initialized JPanel for the south section.
+     */
+    private JPanel createSouthPanel(Project project) {
         pmdButton = new JButton("Analyse Code");
         pmdButton.setEnabled(false);  // Initially disabled
         pmdButton.addActionListener(e -> runPMDAnalysis(project));
@@ -197,16 +230,13 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         buttonPanelBottom.add(pmdButton);
 
         feedbackPanel = UserFeedback.createFeedbackPanel();
+        feedbackPanel.setVisible(false);
 
         JPanel southPanel = new JPanel(new BorderLayout());
         southPanel.add(buttonPanelBottom, BorderLayout.NORTH);
         southPanel.add(feedbackPanel, BorderLayout.SOUTH);
 
-        panel.add(southPanel, BorderLayout.SOUTH);
-
-        updateFileStatus(project);
-
-        return panel;
+        return southPanel;
     }
 
     /**
@@ -222,54 +252,6 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
             clipboard.setContents(stringSelection, null);
         });
         return copyToClipboardButton;
-    }
-
-    /**
-     * Updates the file status and button based on the currently detected Java file.
-     *
-     * @param project The current IntelliJ project.
-     */
-    private void updateFileStatus(Project project) {
-        Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
-
-        if (fileOpt.isEmpty()) {
-            setFileStatus("No Java file detected", false);
-            return;
-        }
-
-        VirtualFile file = fileOpt.get();
-        String filePath = file.getPath();
-
-        // Check if this file was previously analyzed
-        if (analyzedFilesCache.containsKey(filePath)) {
-            boolean hasIssues = analyzedFilesCache.get(filePath);
-            setFileStatus("Java file detected: " + file.getName(), true);
-
-            if (hasIssues) {
-                // show the LLM response button
-                updateButtonForLLMResponse(project);
-            } else {
-                // show analyze button
-                resetToAnalyzeMode(project);
-            }
-        } else {
-            // File not analyzed yet, show analyze button
-            setFileStatus("Java file detected: " + file.getName(), true);
-            resetToAnalyzeMode(project);
-        }
-    }
-
-
-    /**
-     * Helper method to update the status label and button state.
-     *
-     * @param statusMessage The message to display in the status label.
-     * @param isEnabled     Whether the "Analyze Code" button should be enabled.
-     */
-    private void setFileStatus(String statusMessage, boolean isEnabled) {
-        statusLabel.setText(statusMessage);
-        pmdButton.setEnabled(isEnabled);
-        feedbackPanel.setVisible(false);
     }
 
     /**
@@ -321,7 +303,6 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     private void updateAnalysisResults(String resultMessage) {
         resultTextArea.setText(resultMessage);
         statusLabel.setText("PMD Analysis completed!");
-        feedbackPanel.setVisible(true);
     }
 
     /**
@@ -344,19 +325,6 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
                         )
                 )
         );
-    }
-
-    /**
-     * Updates the PMD button to handle LLM response requests.
-     *
-     * @param project The current IntelliJ project
-     */
-    private void updateButtonForLLMResponse(Project project) {
-        pmdButton.setText("Get LLM Response");
-        for (var listener : pmdButton.getActionListeners()) {
-            pmdButton.removeActionListener(listener);
-        }
-        pmdButton.addActionListener(e -> showLLMProcessingDialog(project));
     }
 
     /**
@@ -389,7 +357,7 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
             protected void done() {
                 loadingDialog.dispose();
                 showBatchResultMessage();
-                resetToAnalyzeMode(project);
+                feedbackPanel.setVisible(true);
             }
         };
         LoggerUtil.info("Executing SwingWorker");
@@ -500,5 +468,67 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
             pmdButton.removeActionListener(listener);
         }
         pmdButton.addActionListener(e -> runPMDAnalysis(project));
+    }
+
+    /**
+     * Updates the PMD button to handle LLM response requests.
+     *
+     * @param project The current IntelliJ project
+     */
+    private void updateButtonForLLMResponse(Project project) {
+        pmdButton.setText("Get LLM Response");
+        for (var listener : pmdButton.getActionListeners()) {
+            pmdButton.removeActionListener(listener);
+        }
+        pmdButton.addActionListener(e -> showLLMProcessingDialog(project));
+    }
+
+    /**
+     * Updates the file status and button based on the currently detected Java file.
+     *
+     * @param project The current IntelliJ project.
+     */
+    private void updateFileStatus(Project project) {
+        Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
+
+        if (fileOpt.isEmpty()) {
+            setFileStatus("No Java file detected", false);
+            return;
+        }
+
+        VirtualFile file = fileOpt.get();
+        String filePath = file.getPath();
+
+        // Check if this file was previously analyzed
+        if (analyzedFilesCache.containsKey(filePath)) {
+            boolean hasIssues = analyzedFilesCache.get(filePath);
+            setFileStatus("Java file detected: " + file.getName(), true);
+
+            if (hasIssues) {
+                // show the LLM response button
+                updateButtonForLLMResponse(project);
+            } else {
+                // show analyze button
+                resetToAnalyzeMode(project);
+                feedbackPanel.setVisible(false);
+            }
+        } else {
+            // File not analyzed yet, show analyze button
+            setFileStatus("Java file detected: " + file.getName(), true);
+            resetToAnalyzeMode(project);
+            feedbackPanel.setVisible(false);
+        }
+    }
+
+
+    /**
+     * Helper method to update the status label and button state.
+     *
+     * @param statusMessage The message to display in the status label.
+     * @param isEnabled     Whether the "Analyze Code" button should be enabled.
+     */
+    private void setFileStatus(String statusMessage, boolean isEnabled) {
+        statusLabel.setText(statusMessage);
+        pmdButton.setEnabled(isEnabled);
     }
 }
