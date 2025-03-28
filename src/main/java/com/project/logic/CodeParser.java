@@ -6,6 +6,7 @@ import com.github.javaparser.ast.Node;
 import com.github.javaparser.ast.body.*;
 import com.github.javaparser.ast.expr.LambdaExpr;
 import com.github.javaparser.ast.visitor.GenericVisitorAdapter;
+import com.project.api.RequestStorage;
 import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
 import com.project.util.LoggerUtil;
@@ -79,6 +80,9 @@ public class CodeParser {
                     }
                 });
             }
+
+            RequestStorage.clearCodeSnippets();
+            blocksInfo.forEach(block -> RequestStorage.addCodeSnippet(block.codeSnippet()));
 
             LoggerUtil.info("Extracted " + blocksInfo.size() + " code blocks from " + filePath);
         } catch (Exception e) {

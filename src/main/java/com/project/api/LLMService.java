@@ -33,7 +33,7 @@ public class LLMService {
             String requestPayload = ApiRequestBuilder.buildRequest(prompt, model, maxTokens, temperature);
 
             // Store the prompt in PromptStorage
-            PromptStorage.setLastPrompt(prompt);
+            RequestStorage.setLastPrompt(prompt);
 
             // Send the request and handle the response
             JsonNode jsonResponse = ApiClient.sendPostRequest(requestPayload);

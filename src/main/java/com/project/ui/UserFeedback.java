@@ -1,7 +1,7 @@
 package com.project.ui;
 
 import com.intellij.openapi.application.PathManager;
-import com.project.api.PromptStorage;
+import com.project.api.RequestStorage;
 import org.json.JSONObject;
 import org.json.JSONArray;
 import com.project.util.LoggerUtil;
@@ -51,9 +51,9 @@ public class UserFeedback {
         JButton thumbsDownButton = new JButton("👎");
 
         thumbsUpButton.addActionListener(e ->
-                storeFeedback(true, PromptStorage.getLastPrompt()));
+                storeFeedback(true, RequestStorage.getLastPrompt()));
         thumbsDownButton.addActionListener(e ->
-                storeFeedback(false, PromptStorage.getLastPrompt()));
+                storeFeedback(false, RequestStorage.getLastPrompt()));
 
         buttonPanel.add(thumbsUpButton);
         buttonPanel.add(thumbsDownButton);
