@@ -72,6 +72,11 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
      * Button to copy the LLM response to the clipboard
      */
     private JButton copyToClipboardButton;
+    /**
+     * Instance of the AnalysisFeatures class to handle analysis features.
+     */
+    private AnalysisFeatures analysisFeatures;
+
 
 
     /**
@@ -82,11 +87,13 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
      */
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
-        JPanel contentPanel = createMainPanel(project);
+        JPanel contentPanel = createMainPanel();
 
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(contentPanel, "", false);
         toolWindow.getContentManager().addContent(content);
+
+        analysisFeatures = new AnalysisFeatures(resultTextArea, llmResponseTextArea, analyzedFilesCache, pmdButton, statusLabel, feedbackPanel);
 
         // Set initial file status
         updateFileStatus(project);
@@ -133,10 +140,9 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     /**
      * Creates and returns the main panel for the tool window.
      *
-     * @param project The current IntelliJ project.
      * @return The initialized UI panel.
      */
-    private JPanel createMainPanel(Project project) {
+    private JPanel createMainPanel() {
         JPanel panel = new JPanel(new BorderLayout());
 
         statusLabel = new JBLabel("Detecting file...");
@@ -149,8 +155,6 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
 
         JPanel southPanel = createSouthPanel();
         panel.add(southPanel, BorderLayout.SOUTH);
-
-        updateFileStatus(project);
 
         return panel;
     }
@@ -237,6 +241,11 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         return copyToClipboardButton;
     }
 
+    /**
+     * Updates the file status and button based on the currently detected Java file.
+     *
+     * @param project The current IntelliJ project.
+     */
     private void updateFileStatus(Project project) {
         Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
 
@@ -248,12 +257,15 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
         VirtualFile file = fileOpt.get();
         String filePath = file.getPath();
 
-        AnalysisFeatures analysisFeatures = new AnalysisFeatures(resultTextArea, llmResponseTextArea, analyzedFilesCache, pmdButton, statusLabel, feedbackPanel);
-
         // Check if this file was previously analyzed
         if (analyzedFilesCache.containsKey(filePath)) {
             boolean hasIssues = analyzedFilesCache.get(filePath);
             setFileStatus("Java file detected: " + file.getName(), true);
+
+            if (analysisFeatures.getPmdResultCache().containsKey(filePath)) {
+                String cachedResult = analysisFeatures.getPmdResultCache().get(filePath);
+                resultTextArea.setText(cachedResult);
+            }
 
             if (hasIssues) {
                 // show the LLM response button
