@@ -77,8 +77,6 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
      */
     private AnalysisFeatures analysisFeatures;
 
-
-
     /**
      * Initializes the tool window UI and registers event listeners.
      *
