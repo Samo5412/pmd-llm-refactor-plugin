@@ -1,6 +1,5 @@
 package com.project.ui;
 
-import com.github.javaparser.JavaParser;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.EditorFactory;
@@ -20,11 +19,12 @@ import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import com.project.logic.*;
-import com.project.model.BatchPreparationResult;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -48,6 +48,11 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     private JTextArea resultTextArea;
 
     /**
+     * Text area to display the LLM response.
+     */
+    private JTextArea llmResponseTextArea;
+
+    /**
      * Button to trigger PMD code analysis
      */
     private JButton pmdButton;
@@ -58,15 +63,19 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     private JPanel feedbackPanel;
 
     /**
-     * The batch preparation result from the last analysis.
-     */
-    private BatchPreparationResult lastBatchResult;
-
-    /**
      * Map to store analysis results for each analyzed file path.
      * Key: File path, Value: true if issues were found, false otherwise
      */
     private final Map<String, Boolean> analyzedFilesCache = new HashMap<>();
+
+    /**
+     * Button to copy the LLM response to the clipboard
+     */
+    private JButton copyToClipboardButton;
+    /**
+     * Instance of the AnalysisFeatures class to handle analysis features.
+     */
+    private AnalysisFeatures analysisFeatures;
 
     /**
      * Initializes the tool window UI and registers event listeners.
@@ -76,11 +85,13 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
      */
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
-        JPanel contentPanel = createMainPanel(project);
+        JPanel contentPanel = createMainPanel();
 
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(contentPanel, "", false);
         toolWindow.getContentManager().addContent(content);
+
+        analysisFeatures = new AnalysisFeatures(resultTextArea, llmResponseTextArea, analyzedFilesCache, pmdButton, statusLabel, feedbackPanel);
 
         // Set initial file status
         updateFileStatus(project);
@@ -127,38 +138,105 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     /**
      * Creates and returns the main panel for the tool window.
      *
-     * @param project The current IntelliJ project.
      * @return The initialized UI panel.
      */
-    private JPanel createMainPanel(Project project) {
+    private JPanel createMainPanel() {
         JPanel panel = new JPanel(new BorderLayout());
 
         statusLabel = new JBLabel("Detecting file...");
         panel.add(statusLabel, BorderLayout.NORTH);
 
-        resultTextArea = new JTextArea(10, 40);
-        resultTextArea.setEditable(false);
-        JScrollPane scrollPane = new JBScrollPane(resultTextArea);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        JScrollPane resultScrollPane = createResultScrollPane();
+        JScrollPane llmResponseScrollPane = createLLMResponseScrollPane();
+        JSplitPane splitPane = createSplitPane(resultScrollPane, llmResponseScrollPane);
+        panel.add(splitPane, BorderLayout.CENTER);
 
-        pmdButton = new JButton("Analyse Code");
-        pmdButton.setEnabled(false);  // Initially disabled
-        pmdButton.addActionListener(e -> runPMDAnalysis(project));
-
-        JPanel buttonPanel = new JPanel();
-        buttonPanel.add(pmdButton);
-
-        feedbackPanel = UserFeedback.createFeedbackPanel();
-
-        JPanel southPanel = new JPanel(new BorderLayout());
-        southPanel.add(buttonPanel, BorderLayout.NORTH);
-        southPanel.add(feedbackPanel, BorderLayout.SOUTH);
-
+        JPanel southPanel = createSouthPanel();
         panel.add(southPanel, BorderLayout.SOUTH);
 
-        updateFileStatus(project);
-
         return panel;
+    }
+
+    /**
+     * Creates and returns a scroll pane for displaying PMD analysis results.
+     * @return The initialized JScrollPane for PMD results.
+     */
+    private JScrollPane createResultScrollPane() {
+        resultTextArea = new JTextArea(10, 40);
+        resultTextArea.setEditable(false);
+        return new JBScrollPane(resultTextArea);
+    }
+
+    /**
+     * Creates and returns a scroll pane for displaying LLM responses.
+     * @return The initialized JScrollPane for LLM responses.
+     */
+    private JScrollPane createLLMResponseScrollPane() {
+        llmResponseTextArea = new JTextArea(10, 40);
+        llmResponseTextArea.setEditable(false);
+        return new JBScrollPane(llmResponseTextArea);
+    }
+
+    /**
+     * Creates and returns a split pane containing the result and LLM response scroll panes.
+     * @param resultScrollPane The scroll pane for PMD results.
+     * @param llmResponseScrollPane The scroll pane for LLM responses.
+     * @return The initialized JSplitPane.
+     */
+    private JSplitPane createSplitPane(JScrollPane resultScrollPane, JScrollPane llmResponseScrollPane) {
+        JPanel llmResponsePanel = new JPanel(new BorderLayout());
+        JLabel llmResponseLabel = new JLabel("LLM response");
+        llmResponsePanel.add(llmResponseLabel, BorderLayout.NORTH);
+        llmResponsePanel.add(llmResponseScrollPane, BorderLayout.CENTER);
+
+        JLayeredPane layeredPane = new JLayeredPane();
+        layeredPane.setLayout(new BorderLayout());
+        layeredPane.add(llmResponsePanel, BorderLayout.CENTER);
+
+        copyToClipboardButton = createCopyToClipboardButton();
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.add(copyToClipboardButton);
+        layeredPane.add(buttonPanel, BorderLayout.NORTH);
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, resultScrollPane, layeredPane);
+        splitPane.setResizeWeight(0.5);
+        return splitPane;
+    }
+
+    /**
+     * Creates and returns the south panel containing the analyze button and feedback panel.
+     * @return The initialized JPanel for the south section.
+     */
+    private JPanel createSouthPanel() {
+        pmdButton = new JButton("Analyse Code");
+        pmdButton.setEnabled(false);
+
+        JPanel buttonPanelBottom = new JPanel();
+        buttonPanelBottom.add(pmdButton);
+
+        feedbackPanel = UserFeedback.createFeedbackPanel();
+        feedbackPanel.setVisible(false);
+
+        JPanel southPanel = new JPanel(new BorderLayout());
+        southPanel.add(buttonPanelBottom, BorderLayout.NORTH);
+        southPanel.add(feedbackPanel, BorderLayout.SOUTH);
+
+        return southPanel;
+    }
+
+    /**
+     * Creates a button to copy the LLM response to the clipboard.
+     * @return The configured JButton for copying to clipboard.
+     */
+    private JButton createCopyToClipboardButton() {
+        copyToClipboardButton = new JButton("Copy to Clipboard");
+        copyToClipboardButton.addActionListener(e -> {
+            String llmResponseText = llmResponseTextArea.getText();
+            StringSelection stringSelection = new StringSelection(llmResponseText);
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(stringSelection, null);
+        });
+        return copyToClipboardButton;
     }
 
     /**
@@ -182,20 +260,26 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
             boolean hasIssues = analyzedFilesCache.get(filePath);
             setFileStatus("Java file detected: " + file.getName(), true);
 
+            if (analysisFeatures.getPmdResultCache().containsKey(filePath)) {
+                String cachedResult = analysisFeatures.getPmdResultCache().get(filePath);
+                resultTextArea.setText(cachedResult);
+            }
+
             if (hasIssues) {
                 // show the LLM response button
-                updateButtonForLLMResponse(project);
+                analysisFeatures.updateButtonForLLMResponse(project);
             } else {
                 // show analyze button
-                resetToAnalyzeMode(project);
+                analysisFeatures.resetToAnalyzeMode(project);
+                feedbackPanel.setVisible(false);
             }
         } else {
             // File not analyzed yet, show analyze button
             setFileStatus("Java file detected: " + file.getName(), true);
-            resetToAnalyzeMode(project);
+            analysisFeatures.resetToAnalyzeMode(project);
+            feedbackPanel.setVisible(false);
         }
     }
-
 
     /**
      * Helper method to update the status label and button state.
@@ -206,171 +290,5 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     private void setFileStatus(String statusMessage, boolean isEnabled) {
         statusLabel.setText(statusMessage);
         pmdButton.setEnabled(isEnabled);
-        feedbackPanel.setVisible(false);
-    }
-
-    /**
-     * Runs PMD analysis on the currently detected Java file.
-     * Displays results in the text area.
-     *
-     * @param project The current IntelliJ project.
-     */
-    private void runPMDAnalysis(Project project) {
-        VirtualFile file = FileDetector.detectCurrentJavaFile(project).orElse(null);
-
-        if (file == null) {
-            resultTextArea.setText("Error: No Java file selected.");
-            return;
-        }
-
-        String filePath = file.getPath();
-
-        SwingUtilities.invokeLater(() -> {
-            // Create component instances
-            PMDRunner pmdRunner = new PMDRunner();
-            ViolationExtractor violationExtractor = new ViolationExtractor();
-            CodeParser codeParser = new CodeParser(new JavaParser());
-            ResponseFormatter responseFormatter = new ResponseFormatter();
-
-            // Run analysis
-            PMDAnalyzer pmdAnalyzer = new PMDAnalyzer(pmdRunner, violationExtractor, codeParser, responseFormatter);
-            String resultMessage = pmdAnalyzer.analyzeFile(project, file);
-            updateAnalysisResults(resultMessage);
-
-            boolean hasIssues = !resultMessage.equals("No issues found.");
-            // Store the analysis result in cache
-            analyzedFilesCache.put(filePath, hasIssues);
-
-            if (hasIssues) {
-                lastBatchResult = prepareBatches(filePath, pmdRunner, violationExtractor, codeParser);
-                updateButtonForLLMResponse(project);
-            } else {
-                resetToAnalyzeMode(project);
-            }
-        });
-    }
-
-    /**
-     * Updates UI with analysis results.
-     *
-     * @param resultMessage The message to display in the result area
-     */
-    private void updateAnalysisResults(String resultMessage) {
-        resultTextArea.setText(resultMessage);
-        statusLabel.setText("PMD Analysis completed!");
-        feedbackPanel.setVisible(true);
-    }
-
-    /**
-     * Prepares code block batches for LLM processing.
-     *
-     * @param filePath Path to the file being analyzed
-     * @param pmdRunner PMD tool runner instance
-     * @param violationExtractor Violation extraction utility
-     * @param codeParser Code parsing utility
-     * @return BatchPreparationResult with the batches and related information
-     */
-    private BatchPreparationResult prepareBatches(String filePath, PMDRunner pmdRunner,
-                                                  ViolationExtractor violationExtractor,
-                                                  CodeParser codeParser) {
-        return PromptBatchTrimmer.splitIntoBatches(
-                codeParser.extractViolatedBlocksInfo(
-                        filePath,
-                        violationExtractor.extractViolations(
-                                pmdRunner.runPMD(filePath)
-                        )
-                )
-        );
-    }
-
-    /**
-     * Updates the PMD button to handle LLM response requests.
-     *
-     * @param project The current IntelliJ project
-     */
-    private void updateButtonForLLMResponse(Project project) {
-        pmdButton.setText("Get LLM Response");
-        for (var listener : pmdButton.getActionListeners()) {
-            pmdButton.removeActionListener(listener);
-        }
-        pmdButton.addActionListener(e -> showLLMProcessingDialog(project));
-    }
-
-    /**
-     * Shows a dialog while processing LLM requests.
-     *
-     * @param project The current IntelliJ project
-     */
-    private void showLLMProcessingDialog(Project project) {
-        JDialog loadingDialog = createLoadingDialog();
-
-        SwingWorker<Void, Void> worker = new SwingWorker<>() {
-            @Override
-            protected Void doInBackground() throws Exception {
-                Thread.sleep(2000); // Simulate processing
-                return null;
-            }
-
-            @Override
-            protected void done() {
-                loadingDialog.dispose();
-                showBatchResultMessage();
-                resetToAnalyzeMode(project);
-            }
-        };
-
-        worker.execute();
-        loadingDialog.setVisible(true);
-    }
-
-    /**
-     * Creates and configures the loading dialog.
-     *
-     * @return Configured JDialog for loading indication
-     */
-    private JDialog createLoadingDialog() {
-        JDialog loadingDialog = new JDialog();
-        loadingDialog.setTitle("Sending to LLM...");
-        loadingDialog.setModal(true);
-        loadingDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-        loadingDialog.setSize(350, 100);
-        loadingDialog.setLocationRelativeTo(null);
-        loadingDialog.setLayout(new BorderLayout());
-
-        JLabel label = new JLabel("Sending code for refactoring...");
-        label.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
-        loadingDialog.add(label, BorderLayout.CENTER);
-
-        return loadingDialog;
-    }
-
-    /**
-     * Shows a message about batch processing results if needed.
-     */
-    private void showBatchResultMessage() {
-        boolean shouldShowMessage = lastBatchResult.batches().size() > 1
-                || !lastBatchResult.skippedBlocks().isEmpty();
-
-        if (shouldShowMessage) {
-            JOptionPane.showMessageDialog(
-                    null,
-                    lastBatchResult.userMessage(),
-                    "Refactoring Preparation Complete",
-                    JOptionPane.INFORMATION_MESSAGE
-            );
-        }
-    }
-
-    /**
-     * Resets the UI to the initial state for a new analysis.
-     *
-     * @param project The current IntelliJ project.
-     */
-    private void resetToAnalyzeMode(Project project) {
-        pmdButton.setText("Analyse Code");
-        for (var listener : pmdButton.getActionListeners()) {
-            pmdButton.removeActionListener(listener);
-        }
-        pmdButton.addActionListener(e -> runPMDAnalysis(project));
     }
 }
