@@ -33,7 +33,8 @@ public class AnalysisFeatures {
     private final JLabel statusLabel;
     private final JPanel feedbackPanel;
     /**
-     * Cache for analyzed files to avoid re-analysis.
+     * Map to store analysis results for each analyzed file path.
+     * Key: File path, Value: true if issues were found, false otherwise
      */
     private final Map<String, Boolean> analyzedFilesCache;
     /**
@@ -42,8 +43,14 @@ public class AnalysisFeatures {
     private BatchPreparationResult lastBatchResult;
     /**
      * Cache for LLM responses.
+     * Key: File path, Value: LLM response string
      */
     private final Map<String, String> llmResponseCache = new HashMap<>();
+    /**
+     * Cache for PMD results.
+     * Key: File path, Value: PMD result string
+     */
+    private final Map<String, String> pmdResultCache = new HashMap<>();
 
     public AnalysisFeatures(JTextArea resultTextArea, JTextArea llmResponseTextArea, Map<String, Boolean> analyzedFilesCache, JButton pmdButton, JLabel statusLabel, JPanel feedbackPanel) {
         this.resultTextArea = resultTextArea;
@@ -79,6 +86,8 @@ public class AnalysisFeatures {
             PMDAnalyzer pmdAnalyzer = new PMDAnalyzer(pmdRunner, violationExtractor, codeParser, responseFormatter);
             String resultMessage = pmdAnalyzer.analyzeFile(project, file);
             updateAnalysisResults(resultMessage);
+
+            pmdResultCache.put(filePath, resultMessage);
 
             boolean hasIssues = !resultMessage.equals("No issues found.");
             analyzedFilesCache.put(filePath, hasIssues);
@@ -282,5 +291,9 @@ public class AnalysisFeatures {
         loadingDialog.add(label, BorderLayout.CENTER);
 
         return loadingDialog;
+    }
+
+    public Map<String, String> getPmdResultCache() {
+        return pmdResultCache;
     }
 }
