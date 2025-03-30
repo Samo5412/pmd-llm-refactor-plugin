@@ -1,16 +1,6 @@
 package com.project.ui;
 
-import com.intellij.openapi.Disposable;
-import com.intellij.openapi.editor.Document;
-import com.intellij.openapi.editor.EditorFactory;
-import com.intellij.openapi.editor.event.DocumentEvent;
-import com.intellij.openapi.editor.event.DocumentListener;
-import com.intellij.openapi.fileEditor.FileDocumentManager;
-import com.intellij.openapi.fileEditor.FileEditorManager;
-import com.intellij.openapi.fileEditor.FileEditorManagerEvent;
-import com.intellij.openapi.fileEditor.FileEditorManagerListener;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowFactory;
@@ -18,15 +8,16 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
-import com.project.logic.*;
+import com.project.ui.util.FileAnalysisTracker;
+import com.project.ui.util.FileChangeListener;
+import com.project.ui.util.FileContentChangeListener;
+import com.project.ui.util.FileTrackingManager;
 import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -35,7 +26,9 @@ import java.util.Optional;
  *
  * @author Sara Moussa
  */
-public class PluginToolWindowFactory implements ToolWindowFactory {
+public class PluginToolWindowFactory implements ToolWindowFactory,
+        FileChangeListener,
+        FileContentChangeListener {
 
     /**
      * Label to display the status of file detection
@@ -63,19 +56,31 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     private JPanel feedbackPanel;
 
     /**
-     * Map to store analysis results for each analyzed file path.
-     * Key: File path, Value: true if issues were found, false otherwise
+     * Tracks and caches file analysis results.
      */
-    private final Map<String, Boolean> analyzedFilesCache = new HashMap<>();
+    private final FileAnalysisTracker fileAnalysisTracker;
+
+    /**
+     * Manages file tracking and change notifications.
+     */
+    private FileTrackingManager fileTrackingManager;
 
     /**
      * Button to copy the LLM response to the clipboard
      */
     private JButton copyToClipboardButton;
+
     /**
      * Instance of the AnalysisFeatures class to handle analysis features.
      */
     private AnalysisFeatures analysisFeatures;
+
+    /**
+     * Creates a new instance of the PluginToolWindowFactory.
+     */
+    public PluginToolWindowFactory() {
+        this.fileAnalysisTracker = new FileAnalysisTracker();
+    }
 
     /**
      * Initializes the tool window UI and registers event listeners.
@@ -87,53 +92,104 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         JPanel contentPanel = createMainPanel();
 
+        // initialize UI components with default states
+        statusLabel.setText("No Java file detected");
+        resultTextArea.setText("Ready to analyze.");
+        llmResponseTextArea.setText("");
+        pmdButton.setEnabled(false);
+        feedbackPanel.setVisible(false);
+
         ContentFactory contentFactory = ContentFactory.getInstance();
         Content content = contentFactory.createContent(contentPanel, "", false);
         toolWindow.getContentManager().addContent(content);
 
-        analysisFeatures = new AnalysisFeatures(resultTextArea, llmResponseTextArea, analyzedFilesCache, pmdButton, statusLabel, feedbackPanel);
+        analysisFeatures = new AnalysisFeatures(resultTextArea, llmResponseTextArea, fileAnalysisTracker, pmdButton, statusLabel, feedbackPanel);
 
-        // Set initial file status
-        updateFileStatus(project);
-
-        // Add file editor listener to detect file switching
-        project.getMessageBus().connect().subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER,
-                new FileEditorManagerListener() {
-                    @Override
-                    public void fileOpened(@NotNull FileEditorManager source, @NotNull VirtualFile file) {
-                        updateFileStatus(project);
-                    }
-
-                    @Override
-                    public void selectionChanged(@NotNull FileEditorManagerEvent event) {
-                        updateFileStatus(project);
-                    }
-                }
-        );
-
-        // Create a disposable for the document listener
-        Disposable disposable = Disposer.newDisposable();
-        Disposer.register(project, disposable);
-
-        // track changes to the currently open file
-        EditorFactory.getInstance().getEventMulticaster().addDocumentListener(
-                new DocumentListener() {
-                    @Override
-                    public void documentChanged(@NotNull DocumentEvent event) {
-                        Optional<VirtualFile> currentFile = FileDetector.detectCurrentJavaFile(project);
-                        if (currentFile.isPresent()) {
-                            Document currentDoc = FileDocumentManager.getInstance().getDocument(currentFile.get());
-                            if (currentDoc == event.getDocument()) {
-                                // File content changed, remove from analyzed cache
-                                analyzedFilesCache.remove(currentFile.get().getPath());
-                                updateFileStatus(project);
-                            }
-                        }
-                    }
-                },
-                disposable
-        );
+        // Initialize file tracking manager and register as listener
+        fileTrackingManager = new FileTrackingManager(project, fileAnalysisTracker);
+        fileTrackingManager.addFileChangeListener(this);
+        fileTrackingManager.addFileContentChangeListener(this);
     }
+
+    /**
+     * Handles file change events from the FileTrackingManager.
+     *
+     * @param file The active Java file, or empty if no Java file is active.
+     */
+    @Override
+    public void onFileChanged(@NotNull Optional<VirtualFile> file) {
+        Project project = fileTrackingManager.getProject();
+
+        if (file.isEmpty()) {
+            statusLabel.setText("No Java file detected");
+            pmdButton.setEnabled(false);
+            resultTextArea.setText("");
+            llmResponseTextArea.setText("");
+            feedbackPanel.setVisible(false);
+            return;
+        }
+
+        VirtualFile currentFile = file.get();
+        String filePath = currentFile.getPath();
+
+        // Set status label and enable analyze button for all Java files
+        statusLabel.setText("Java file detected: " + currentFile.getName());
+        pmdButton.setEnabled(true);
+
+        // Check if this file was previously analyzed
+        Boolean hasIssues = fileAnalysisTracker.getCachedAnalysisResult(filePath);
+
+        if (hasIssues != null) {
+            // Restore PMD results
+            String cachedPmdResult = fileAnalysisTracker.getCachedPmdResult(filePath);
+            if (cachedPmdResult != null) {
+                resultTextArea.setText(cachedPmdResult);
+            }
+
+            // Restore LLM response if it exists
+            String cachedLLMResponse = fileAnalysisTracker.getCachedLLMResponse(filePath);
+            if (cachedLLMResponse != null) {
+                llmResponseTextArea.setText(cachedLLMResponse);
+            }
+
+            if (hasIssues) {
+                if (cachedLLMResponse != null && !cachedLLMResponse.isEmpty()) {
+                    feedbackPanel.setVisible(true);
+                } else {
+                    analysisFeatures.updateButtonForLLMResponse(project);
+                }
+            } else {
+                analysisFeatures.resetToAnalyzeMode(project);
+                feedbackPanel.setVisible(false);
+            }
+        } else {
+            resultTextArea.setText("Ready to analyze.");
+            llmResponseTextArea.setText("");
+            analysisFeatures.resetToAnalyzeMode(project);
+            feedbackPanel.setVisible(false);
+        }
+    }
+
+    /**
+     * Handles file content change events from the FileTrackingManager.
+     *
+     * @param file The file whose content has changed.
+     */
+    @Override
+    public void onFileContentChanged(@NotNull VirtualFile file) {
+        statusLabel.setText("File modified, re-analysis required");
+
+        resultTextArea.setText("");
+        llmResponseTextArea.setText("");
+
+        if (analysisFeatures != null) {
+            analysisFeatures.resetToAnalyzeMode(fileTrackingManager.getProject());
+        } else {
+            pmdButton.setEnabled(true);
+        }
+        feedbackPanel.setVisible(false);
+    }
+
 
     /**
      * Creates and returns the main panel for the tool window.
@@ -237,58 +293,5 @@ public class PluginToolWindowFactory implements ToolWindowFactory {
             clipboard.setContents(stringSelection, null);
         });
         return copyToClipboardButton;
-    }
-
-    /**
-     * Updates the file status and button based on the currently detected Java file.
-     *
-     * @param project The current IntelliJ project.
-     */
-    private void updateFileStatus(Project project) {
-        Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
-
-        if (fileOpt.isEmpty()) {
-            setFileStatus("No Java file detected", false);
-            return;
-        }
-
-        VirtualFile file = fileOpt.get();
-        String filePath = file.getPath();
-
-        // Check if this file was previously analyzed
-        if (analyzedFilesCache.containsKey(filePath)) {
-            boolean hasIssues = analyzedFilesCache.get(filePath);
-            setFileStatus("Java file detected: " + file.getName(), true);
-
-            if (analysisFeatures.getPmdResultCache().containsKey(filePath)) {
-                String cachedResult = analysisFeatures.getPmdResultCache().get(filePath);
-                resultTextArea.setText(cachedResult);
-            }
-
-            if (hasIssues) {
-                // show the LLM response button
-                analysisFeatures.updateButtonForLLMResponse(project);
-            } else {
-                // show analyze button
-                analysisFeatures.resetToAnalyzeMode(project);
-                feedbackPanel.setVisible(false);
-            }
-        } else {
-            // File not analyzed yet, show analyze button
-            setFileStatus("Java file detected: " + file.getName(), true);
-            analysisFeatures.resetToAnalyzeMode(project);
-            feedbackPanel.setVisible(false);
-        }
-    }
-
-    /**
-     * Helper method to update the status label and button state.
-     *
-     * @param statusMessage The message to display in the status label.
-     * @param isEnabled     Whether the "Analyze Code" button should be enabled.
-     */
-    private void setFileStatus(String statusMessage, boolean isEnabled) {
-        statusLabel.setText(statusMessage);
-        pmdButton.setEnabled(isEnabled);
     }
 }
