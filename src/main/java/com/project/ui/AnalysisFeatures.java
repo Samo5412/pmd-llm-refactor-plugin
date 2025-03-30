@@ -13,12 +13,11 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.project.api.RequestStorage;
 import com.project.logic.*;
 import com.project.model.BatchPreparationResult;
+import com.project.ui.util.FileAnalysisTracker;
 import com.project.util.LoggerUtil;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
@@ -27,39 +26,45 @@ import java.util.concurrent.ExecutionException;
  */
 public class AnalysisFeatures {
 
+    /**
+     * Text areas for displaying PMD analysis results
+     */
     private final JTextArea resultTextArea;
+
+    /**
+     * Text area for displaying LLM responses.
+     */
     private final JTextArea llmResponseTextArea;
+
+    /**
+     * Button to trigger PMD analysis or LLM response.
+     */
     private final JButton pmdButton;
+
+    /**
+     * Label to display the status of the analysis.
+     */
     private final JLabel statusLabel;
+
+    /**
+     * Panel for displaying user feedback options.
+     */
     private final JPanel feedbackPanel;
 
     /**
-     * Map to store analysis results for each analyzed file path.
-     * Key: File path, Value: true if issues were found, false otherwise
+     * Tracks and caches file analysis results.
      */
-    private final Map<String, Boolean> analyzedFilesCache;
+    private final FileAnalysisTracker fileAnalysisTracker;
 
     /**
      * Stores the last batch preparation result for LLM processing.
      */
     private BatchPreparationResult lastBatchResult;
 
-    /**
-     * Cache for LLM responses.
-     * Key: File path, Value: LLM response string
-     */
-    private final Map<String, String> llmResponseCache = new HashMap<>();
-
-    /**
-     * Cache for PMD results.
-     * Key: File path, Value: PMD result string
-     */
-    private final Map<String, String> pmdResultCache = new HashMap<>();
-
-    public AnalysisFeatures(JTextArea resultTextArea, JTextArea llmResponseTextArea, Map<String, Boolean> analyzedFilesCache, JButton pmdButton, JLabel statusLabel, JPanel feedbackPanel) {
+    public AnalysisFeatures(JTextArea resultTextArea, JTextArea llmResponseTextArea, FileAnalysisTracker fileAnalysisTracker, JButton pmdButton, JLabel statusLabel, JPanel feedbackPanel) {
         this.resultTextArea = resultTextArea;
         this.llmResponseTextArea = llmResponseTextArea;
-        this.analyzedFilesCache = analyzedFilesCache;
+        this.fileAnalysisTracker = fileAnalysisTracker;
         this.pmdButton = pmdButton;
         this.statusLabel = statusLabel;
         this.feedbackPanel = feedbackPanel;
@@ -91,10 +96,8 @@ public class AnalysisFeatures {
             String resultMessage = pmdAnalyzer.analyzeFile(project, file);
             updateAnalysisResults(resultMessage);
 
-            pmdResultCache.put(filePath, resultMessage);
-
             boolean hasIssues = !resultMessage.equals("No issues found.");
-            analyzedFilesCache.put(filePath, hasIssues);
+            fileAnalysisTracker.cacheAnalysisResult(filePath, hasIssues, resultMessage);
 
             if (hasIssues) {
                 lastBatchResult = prepareBatches(filePath, pmdRunner, violationExtractor, codeParser);
@@ -179,9 +182,10 @@ public class AnalysisFeatures {
 
                 String filePath = fileOpt.get().getPath();
 
-                if (llmResponseCache.containsKey(filePath)) {
+                String cachedResponse = fileAnalysisTracker.getCachedLLMResponse(filePath);
+                if (cachedResponse != null) {
                     LoggerUtil.info("Cache hit for file: " + filePath);
-                    return llmResponseCache.get(filePath);
+                    return cachedResponse;
                 }
 
                 try {
@@ -193,7 +197,7 @@ public class AnalysisFeatures {
                             "}";
 
                     LoggerUtil.info("LLM response received: " + llmResponse);
-                    llmResponseCache.put(filePath, llmResponse);
+                    fileAnalysisTracker.cacheLLMResponse(filePath, llmResponse);
                     return llmResponse;
                 } catch (InterruptedException e) {
                     LoggerUtil.error("Error processing LLM response: " + e.getMessage(), e);
@@ -295,13 +299,5 @@ public class AnalysisFeatures {
         loadingDialog.add(label, BorderLayout.CENTER);
 
         return loadingDialog;
-    }
-
-    /**
-     * Returns the last batch preparation result.
-     * @return The last batch preparation result.
-     */
-    public Map<String, String> getPmdResultCache() {
-        return pmdResultCache;
     }
 }
