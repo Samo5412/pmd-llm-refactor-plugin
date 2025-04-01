@@ -76,6 +76,12 @@ public class PluginToolWindowFactory implements ToolWindowFactory,
     private AnalysisFeatures analysisFeatures;
 
     /**
+     * Button to regenerate the LLM response by invalidating the cache
+     */
+    private JButton regenerateLLMButton;
+
+
+    /**
      * Creates a new instance of the PluginToolWindowFactory.
      */
     public PluginToolWindowFactory() {
@@ -126,6 +132,7 @@ public class PluginToolWindowFactory implements ToolWindowFactory,
             resultTextArea.setText("");
             llmResponseTextArea.setText("");
             feedbackPanel.setVisible(false);
+            regenerateLLMButton.setVisible(false);
             return;
         }
 
@@ -150,13 +157,18 @@ public class PluginToolWindowFactory implements ToolWindowFactory,
             String cachedLLMResponse = fileAnalysisTracker.getCachedLLMResponse(filePath);
             if (cachedLLMResponse != null) {
                 llmResponseTextArea.setText(cachedLLMResponse);
+                regenerateLLMButton.setVisible(true);
+            } else {
+                regenerateLLMButton.setVisible(false);
             }
 
             if (hasIssues) {
                 if (cachedLLMResponse != null && !cachedLLMResponse.isEmpty()) {
+                    analysisFeatures.updateButtonToViewDiff(project); // clearly sets "View Diff"
                     feedbackPanel.setVisible(true);
                 } else {
                     analysisFeatures.updateButtonForLLMResponse(project);
+                    feedbackPanel.setVisible(false);
                 }
             } else {
                 analysisFeatures.resetToAnalyzeMode(project);
@@ -167,6 +179,7 @@ public class PluginToolWindowFactory implements ToolWindowFactory,
             llmResponseTextArea.setText("");
             analysisFeatures.resetToAnalyzeMode(project);
             feedbackPanel.setVisible(false);
+            regenerateLLMButton.setVisible(false);
         }
     }
 
@@ -250,13 +263,31 @@ public class PluginToolWindowFactory implements ToolWindowFactory,
         layeredPane.add(llmResponsePanel, BorderLayout.CENTER);
 
         copyToClipboardButton = createCopyToClipboardButton();
+        regenerateLLMButton = createRegenerateLLMButton();
+        regenerateLLMButton.setVisible(false);
+
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.add(regenerateLLMButton);
         buttonPanel.add(copyToClipboardButton);
         layeredPane.add(buttonPanel, BorderLayout.NORTH);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, resultScrollPane, layeredPane);
         splitPane.setResizeWeight(0.5);
         return splitPane;
+    }
+
+    /**
+     * Creates a button to regenerate the LLM response.
+     * @return The configured JButton for regenerating LLM response.
+     */
+    private JButton createRegenerateLLMButton() {
+        JButton button = new JButton("Regenerate LLM");
+        button.addActionListener(e -> {
+            if (analysisFeatures != null) {
+                analysisFeatures.regenerateLLMResponse(fileTrackingManager.getProject());
+            }
+        });
+        return button;
     }
 
     /**

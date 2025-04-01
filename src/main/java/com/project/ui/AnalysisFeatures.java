@@ -10,6 +10,7 @@ import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.project.api.LLMService;
 import com.project.api.RequestStorage;
 import com.project.logic.*;
 import com.project.model.BatchPreparationResult;
@@ -189,21 +190,27 @@ public class AnalysisFeatures {
                 }
 
                 try {
-                    Thread.sleep(2000);  // simulate processing time for LLM
-                    String llmResponse = "public class HelloWorld {\n" + // TODO: Replace with actual LLM response
-                            "    public static void main(String[] args) {\n" +
-                            "        System.out.println(\"Hello, World!\");\n" +
-                            "    }\n" +
-                            "}";
+                    long startTime = System.currentTimeMillis();
 
-                    LoggerUtil.info("LLM response received: " + llmResponse);
+                    String prompt = generatePromptFromBatchResult();
+                    String model = "deepseek/deepseek-chat:free";
+                    int maxTokens = 1000;
+                    double temperature = 0.7;
+
+                    String llmResponse = LLMService.getLLMResponse(prompt, model, maxTokens, temperature);
+
+                    // End timing here and log
+                    long elapsedTime = System.currentTimeMillis() - startTime;
+                    LoggerUtil.info("LLM processing took: " + elapsedTime + " ms");
+
                     fileAnalysisTracker.cacheLLMResponse(filePath, llmResponse);
+
                     return llmResponse;
-                } catch (InterruptedException e) {
-                    LoggerUtil.error("Error processing LLM response: " + e.getMessage(), e);
-                    Thread.currentThread().interrupt();
+
+                } catch (Exception e) {
+                    LoggerUtil.error("Error calling LLM service: " + e.getMessage(), e);
+                    return "An error occurred while fetching the LLM response: " + e.getMessage();
                 }
-                return null;
             }
 
             @Override
@@ -212,6 +219,7 @@ public class AnalysisFeatures {
                     String llmResponse = get();
                     if (llmResponse != null) {
                         displayLLMResponse(project, llmResponse);
+                        updateButtonToViewDiff(project);
                     }
                     feedbackPanel.setVisible(true);
                 } catch (InterruptedException | ExecutionException e) {
@@ -224,6 +232,19 @@ public class AnalysisFeatures {
         };
         worker.execute();
         loadingDialog.setVisible(true);
+    }
+
+    /**
+     * Generates a prompt based on the results of the last batch processing.
+     *
+     * @return The generated prompt string or a default prompt if no batch result is available.
+     */
+    private String generatePromptFromBatchResult() {
+        if (lastBatchResult != null && !lastBatchResult.batches().isEmpty()) {
+            ResponseFormatter formatter = new ResponseFormatter();
+            return formatter.formatApiResponse(lastBatchResult.batches().get(0));
+        }
+        return "Refactor the following Java code according to PMD suggestions.";
     }
 
     /**
@@ -299,5 +320,77 @@ public class AnalysisFeatures {
         loadingDialog.add(label, BorderLayout.CENTER);
 
         return loadingDialog;
+    }
+
+    /**
+     * Updates the PMD button to clearly show cached LLM response (diff mode).
+     * @param project The current IntelliJ project.
+     */
+    public void updateButtonToViewDiff(Project project) {
+        pmdButton.setText("View Diff");
+        for (var listener : pmdButton.getActionListeners()) {
+            pmdButton.removeActionListener(listener);
+        }
+        pmdButton.addActionListener(e -> handleViewDiff(project));
+    }
+
+    /**
+     * Handles the action of viewing the diff between the original and LLM refactored code.
+     * @param project The current IntelliJ project.
+     */
+    private void handleViewDiff(Project project) {
+        Optional<VirtualFile> currentFileOpt = FileDetector.detectCurrentJavaFile(project);
+        if (currentFileOpt.isPresent()) {
+            VirtualFile file = currentFileOpt.get();
+            String cachedResponse = fileAnalysisTracker.getCachedLLMResponse(file.getPath());
+
+            if (cachedResponse != null) {
+                displayLLMResponse(project, cachedResponse);
+                statusLabel.setText("Displaying cached LLM response.");
+            } else {
+                resultTextArea.setText("No cached response available. Please generate a new one.");
+                statusLabel.setText("Please generate a fresh LLM response.");
+                resetToLLMGenerationMode(project);
+            }
+        } else {
+            resultTextArea.setText("Error: No Java file selected.");
+            statusLabel.setText("Java file selection error.");
+        }
+    }
+
+    /**
+     * Resets the state clearly to LLM Generation mode.
+     * This is used to allow explicitly requesting a fresh LLM response.
+     *
+     * @param project The current IntelliJ project.
+     */
+    public void resetToLLMGenerationMode(Project project) {
+        pmdButton.setText("Get LLM Response");
+        for (var listener : pmdButton.getActionListeners()) {
+            pmdButton.removeActionListener(listener);
+        }
+        pmdButton.addActionListener(e -> showLLMProcessingDialog(project));
+        statusLabel.setText("Ready to generate a new LLM response.");
+    }
+
+    /**
+     * Explicit method clearly defining handling regeneration of fresh LLM response.
+     * @param project The IntelliJ project context.
+     */
+    public void regenerateLLMResponse(Project project) {
+        Optional<VirtualFile> currentFileOpt = FileDetector.detectCurrentJavaFile(project);
+        if (currentFileOpt.isEmpty()) {
+            statusLabel.setText("No Java file selected.");
+            return;
+        }
+
+        VirtualFile file = currentFileOpt.get();
+        String filePath = file.getPath();
+
+        fileAnalysisTracker.invalidateLLMResponse(filePath);
+
+        showLLMProcessingDialog(project);
+
+        statusLabel.setText("Regenerating fresh LLM response...");
     }
 }

@@ -26,7 +26,7 @@ public class ApiClient {
     private static SettingsManager settingsManager = SettingsManager.getInstance();
 
     /** Flag indicating whether to use EnvLoader for API key retrieval */
-    private static boolean useEnvLoader = true;
+    private static boolean useEnvLoader = false;
 
     /** HTTP client with configured timeouts for handling API requests */
     private static final OkHttpClient httpClient = new OkHttpClient.Builder()
