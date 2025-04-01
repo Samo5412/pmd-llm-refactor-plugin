@@ -37,9 +37,41 @@ public class ApiResponseHandler {
                 throw new ApiResponseException("Invalid API response: Missing 'choices' field.");
             }
 
-            return choices.get(0).path("message").path("content").asText();
+            String content = choices.get(0).path("message").path("content").asText();
+            return stripMarkdownCodeBlock(content);
         } catch (IOException e) {
             throw new ApiResponseException("Failed to parse API response: " + e.getMessage());
         }
+    }
+
+
+    /**
+     * Strips the content of a Markdown code block, removing the enclosing backticks and returning
+     * only the code inside the block.
+     *
+     * @param content The input string that may contain a Markdown code block.
+     * @return The extracted code inside the Markdown code block, or the original content if no code block is found.
+     */
+    private static String stripMarkdownCodeBlock(String content) {
+        if (content == null || content.isEmpty()) {
+            return content;
+        }
+
+        int startIdx = content.indexOf("```");
+        if (startIdx == -1) {
+            return content;
+        }
+
+        int codeStart = content.indexOf("\n", startIdx);
+        if (codeStart == -1) {
+            return content;
+        }
+
+        int endIdx = content.indexOf("```", codeStart);
+        if (endIdx == -1) {
+            return content;
+        }
+
+        return content.substring(codeStart + 1, endIdx).trim();
     }
 }
