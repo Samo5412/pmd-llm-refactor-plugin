@@ -99,4 +99,15 @@ public class FileAnalysisTracker {
     public String getCachedPmdResult(String filePath) {
         return pmdResultCache.get(filePath);
     }
+
+    /**
+     * Invalidates only the LLM response for a file, preserving other cached data.
+     *
+     * @param filePath the path of the file to invalidate LLM response for
+     */
+    public void invalidateLLMResponse(String filePath) {
+        if (filePath != null) {
+            llmResponseCache.remove(filePath);
+        }
+    }
 }
