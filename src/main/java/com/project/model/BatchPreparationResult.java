@@ -1,5 +1,6 @@
 package com.project.model;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -14,4 +15,19 @@ public record BatchPreparationResult(
         List<List<CodeBlockInfo>> batches,
         String userMessage,
         List<CodeBlockInfo> skippedBlocks
-) {}
+) {
+    /**
+     * Returns a flat list of all code blocks from all batches and skipped blocks.
+     *
+     * @return A list containing all code blocks
+     */
+    public List<CodeBlockInfo> allBlocks() {
+        List<CodeBlockInfo> allBlocks = new ArrayList<>();
+        for (List<CodeBlockInfo> batch : batches) {
+            allBlocks.addAll(batch);
+        }
+        allBlocks.addAll(skippedBlocks);
+        return allBlocks;
+    }
+
+}

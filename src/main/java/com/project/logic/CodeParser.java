@@ -218,4 +218,87 @@ public class CodeParser {
         if (node instanceof InitializerDeclaration) return "StaticBlock";
         return "Unknown";
     }
+
+    /**
+     * Inserts marker comments around code blocks containing violations.
+     *
+     * @param fileContent The original file content as a string
+     * @param blocks List of CodeBlockInfo objects containing violations
+     * @return A new string with marker comments inserted around flagged blocks
+     */
+    public String insertMarkers(String fileContent, List<CodeBlockInfo> blocks) {
+        if (fileContent == null || blocks == null || blocks.isEmpty()) {
+            return fileContent;
+        }
+
+        // Split the file into lines
+        List<String> lines = new ArrayList<>(List.of(fileContent.split("\n", -1)));
+
+        // Filter blocks that contain violations and sort by start line in descending order
+        List<CodeBlockInfo> blocksWithViolations = blocks.stream()
+                .filter(block -> block.violations() != null && !block.violations().isEmpty())
+                .sorted((b1, b2) -> Integer.compare(b2.startLine(), b1.startLine()))
+                .toList();
+
+        // Insert markers for each block with violations
+        int uniqueId = 1;
+        for (CodeBlockInfo block : blocksWithViolations) {
+            int startLine = block.startLine() - 1;
+            int endLine = block.endLine();
+
+            // Extract actual method or class name from the code snippet
+            String name = extractEntityName(block);
+            String markerId = name + "-" + uniqueId;
+
+            // Insert end marker after the block
+            if (endLine <= lines.size()) {
+                lines.add(endLine, "// <end-flagged:" + markerId + ">");
+            }
+
+            // Insert start marker before the block
+            if (startLine >= 0) {
+                lines.add(startLine, "// <start-flagged:" + markerId + ">");
+            }
+
+            uniqueId++;
+        }
+
+        return String.join("\n", lines);
+    }
+
+    /**
+     * Extracts the actual name of the method, class, or other entity from a code block.
+     *
+     * @param block The CodeBlockInfo containing the code snippet
+     * @return The extracted name, or the block type if name cannot be determined
+     */
+    private String extractEntityName(CodeBlockInfo block) {
+        String snippet = block.codeSnippet();
+        String blockType = block.blockType();
+
+        if (snippet == null || snippet.isEmpty()) {
+            return blockType;
+        }
+
+        // Extract method name for Method blocks
+        if ("Method".equals(blockType)) {
+            java.util.regex.Pattern methodPattern = java.util.regex.Pattern.compile(
+                    "\\s+(\\w+)\\s*\\(");
+            java.util.regex.Matcher matcher = methodPattern.matcher(snippet);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+        // Extract class name for Class blocks
+        else if ("Class".equals(blockType)) {
+            java.util.regex.Pattern classPattern = java.util.regex.Pattern.compile(
+                    "class\\s+(\\w+)");
+            java.util.regex.Matcher matcher = classPattern.matcher(snippet);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+
+        return blockType;
+    }
 }
