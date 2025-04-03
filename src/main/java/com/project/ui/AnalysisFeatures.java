@@ -5,6 +5,7 @@ import com.intellij.diff.DiffContentFactory;
 import com.intellij.diff.DiffManager;
 import com.intellij.diff.contents.DocumentContent;
 import com.intellij.diff.requests.SimpleDiffRequest;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
@@ -13,13 +14,18 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.project.api.LLMService;
 import com.project.api.RequestStorage;
 import com.project.logic.*;
+import com.project.logic.refactoring.CodeQualityAnalyzer;
+import com.project.logic.refactoring.InMemoryFileStorage;
+import com.project.logic.refactoring.MarkerBlockProcessor;
 import com.project.model.BatchPreparationResult;
 import com.project.ui.util.FileAnalysisTracker;
 import com.project.util.LoggerUtil;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.Optional;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -62,6 +68,21 @@ public class AnalysisFeatures {
      */
     private BatchPreparationResult lastBatchResult;
 
+    /**
+     * Processor for handling marker blocks in code.
+     */
+    private final MarkerBlockProcessor markerBlockProcessor;
+
+    /**
+     * Constructor to initialize the analysis features.
+     *
+     * @param resultTextArea        Text area for displaying PMD analysis results.
+     * @param llmResponseTextArea   Text area for displaying LLM responses.
+     * @param fileAnalysisTracker    Tracker for caching file analysis results.
+     * @param pmdButton             Button to trigger PMD analysis or LLM response.
+     * @param statusLabel           Label to display the status of the analysis.
+     * @param feedbackPanel         Panel for displaying user feedback options.
+     */
     public AnalysisFeatures(JTextArea resultTextArea, JTextArea llmResponseTextArea, FileAnalysisTracker fileAnalysisTracker, JButton pmdButton, JLabel statusLabel, JPanel feedbackPanel) {
         this.resultTextArea = resultTextArea;
         this.llmResponseTextArea = llmResponseTextArea;
@@ -69,6 +90,7 @@ public class AnalysisFeatures {
         this.pmdButton = pmdButton;
         this.statusLabel = statusLabel;
         this.feedbackPanel = feedbackPanel;
+        this.markerBlockProcessor = new MarkerBlockProcessor();
     }
 
     /**
@@ -103,10 +125,35 @@ public class AnalysisFeatures {
             if (hasIssues) {
                 lastBatchResult = prepareBatches(filePath, pmdRunner, violationExtractor, codeParser);
                 updateButtonForLLMResponse(project);
+                storeOriginalFileIfViolated(file, filePath, codeParser);
             } else {
                 resetToAnalyzeMode(project);
             }
         });
+    }
+
+    /**
+     * Stores a version of the specified file in memory after removing flagged code blocks.
+     *
+     * @param file       The virtual file being processed.
+     * @param filePath   The path to the original file on the filesystem.
+     * @param codeParser Utility to parse the file and remove flagged code blocks.
+     */
+    private void storeOriginalFileIfViolated(VirtualFile file, String filePath, CodeParser codeParser) {
+        try {
+            String originalContent = Files.readString(Path.of(filePath));
+
+            String markedContent = codeParser.insertMarkers(
+                    originalContent,
+                    lastBatchResult != null ? lastBatchResult.allBlocks() : Collections.emptyList()
+            );
+
+            InMemoryFileStorage storage = ApplicationManager.getApplication().getService(InMemoryFileStorage.class);
+            storage.storeOriginalVersion(file, markedContent);
+            LoggerUtil.info("Marked version of file stored in memory:" + markedContent);
+        } catch (Exception e) {
+            LoggerUtil.error("Failed to store marked version: " + e.getMessage(), e);
+        }
     }
 
     /**
@@ -193,8 +240,10 @@ public class AnalysisFeatures {
                     long startTime = System.currentTimeMillis();
 
                     String prompt = generatePromptFromBatchResult();
+
+                    // TODO: Replace hardcoded model with configurable value from settings
                     String model = "deepseek/deepseek-chat:free";
-                    int maxTokens = 1000;
+                    int maxTokens = 2000;
                     double temperature = 0.7;
 
                     String llmResponse = LLMService.getLLMResponse(prompt, model, maxTokens, temperature);
@@ -259,8 +308,17 @@ public class AnalysisFeatures {
                 VirtualFile currentFile = currentFileOpt.get();
                 Document document = FileDocumentManager.getInstance().getDocument(currentFile);
                 if (document != null) {
+                    // Process the response and get the processed content
+                    String processedContent = processLLMResponse(llmResponse, currentFile);
+
+                    // Analyze the code quality with PMD
+                    CodeQualityAnalyzer analyzer = new CodeQualityAnalyzer();
+                    analyzer.analyzeCodeQuality(currentFile, processedContent);
+                    LoggerUtil.info("Processed content: " + processedContent);
+
                     // Retrieve the last code snippets from RequestStorage
                     String extractedSnippet = String.join("\n", RequestStorage.getCodeSnippets());
+
                     // Pass the extracted snippet to the openDiffView method
                     openDiffView(project, currentFile, extractedSnippet, llmResponse);
                 }
@@ -269,6 +327,41 @@ public class AnalysisFeatures {
             llmResponseTextArea.setCaretPosition(0);
         } catch (Exception e) {
             LoggerUtil.error("Error displaying LLM response: " + e.getMessage(), e);
+        }
+    }
+
+
+    /**
+     * Processes the LLM response and updates the file content.
+     *
+     * @param llmResponse The LLM response to process.
+     * @param currentFile The current file being analyzed.
+     * @return The processed content or null if an error occurs.
+     */
+    private String processLLMResponse(String llmResponse, VirtualFile currentFile) {
+        try {
+            // Process the LLM response with MarkerBlockProcessor
+            Map<String, String> methodMap = markerBlockProcessor.parseMethodsFromLLMResponse(llmResponse);
+            LoggerUtil.info("Parsed " + methodMap.size() + " methods from LLM response");
+
+            // Get the stored marked version of the file
+            InMemoryFileStorage storage = ApplicationManager.getApplication().getService(InMemoryFileStorage.class);
+            String markedContent = storage.getOriginalVersion(currentFile);
+
+            if (markedContent != null) {
+                String processedContent = markerBlockProcessor.processMarkedFile(markedContent, methodMap);
+                LoggerUtil.info("Processed file with marker replacements");
+
+                // Store the processed content for future use
+                storage.storeProcessedVersion(currentFile, processedContent);
+                LoggerUtil.info("Stored processed version of file: " + currentFile.getName());
+
+                return processedContent;
+            }
+            return null;
+        } catch (Exception e) {
+            LoggerUtil.error("Error processing LLM response: " + e.getMessage(), e);
+            return null;
         }
     }
 
