@@ -12,6 +12,7 @@ import java.nio.file.Path;
 
 /**
  * Manages the settings for the application, including API key, API URL, and PMD ruleset.
+ * @author Micael Olsson
  */
 public class SettingsManager {
 
