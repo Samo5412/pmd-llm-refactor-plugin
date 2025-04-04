@@ -1,11 +1,12 @@
 package com.project.settings;
 
+import com.intellij.util.ui.JBUI;
+
 import javax.swing.*;
 import java.awt.*;
 
 /**
  * Represents the settings component UI for the application.
- * @author Micael Olsson
  */
 public class SettingsComponent {
     private final JPanel panel;
@@ -19,9 +20,9 @@ public class SettingsComponent {
      * Constructs a new SettingsComponent.
      */
     public SettingsComponent() {
-        panel = new JPanel();
-        apiKeyField = new JPasswordField(5);
-        apiUrlField = new JTextField(5);
+        panel = new JPanel(new GridBagLayout());
+        apiKeyField = new JPasswordField(20);
+        apiUrlField = new JTextField(20);
         rulesetArea = new JTextArea(10, 30);
         apiKeyStatusLabel = new JLabel("API key: ");
         infoIconLabel = new JLabel(UIManager.getIcon("OptionPane.questionIcon"));
@@ -37,46 +38,107 @@ public class SettingsComponent {
      * Sets up the UI components.
      */
     private void setupUI() {
-        Dimension textFieldSize = new Dimension(
-                apiKeyField.getPreferredSize().width, apiKeyField.getPreferredSize().height);
-        apiKeyField.setPreferredSize(textFieldSize);
-        apiUrlField.setPreferredSize(textFieldSize);
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = JBUI.insets(5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
 
-        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
-        addComponentsToPanel();
+        addComponentsToPanel(gbc);
     }
 
     /**
      * Adds components to the main panel.
+     * @param gbc the GridBagConstraints used for layout.
      */
-    private void addComponentsToPanel() {
+    private void addComponentsToPanel(GridBagConstraints gbc) {
+        addApiKeyComponents(gbc);
+        addVerticalSpace(gbc, 3);
+        addApiUrlComponents(gbc);
+        addVerticalSpace(gbc, 6);
+        addRulesetComponents(gbc);
+    }
+
+    /**
+     * Adds the API key components to the panel.
+     * @param gbc the GridBagConstraints used for layout.
+     */
+    private void addApiKeyComponents(GridBagConstraints gbc) {
         Font labelFont = new Font("Arial", Font.BOLD, 16);
 
-        JPanel apiKeyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel apiKeyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0)); // 5px horizontal gap, no vertical gap
         JLabel apiKeyLabel = new JLabel("API KEY");
         apiKeyLabel.setFont(labelFont);
         apiKeyPanel.add(apiKeyLabel);
         apiKeyPanel.add(infoIconLabel);
 
-        panel.add(apiKeyPanel);
-        panel.add(apiKeyField);
-        panel.add(apiKeyStatusLabel);
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2; // So label + icon stay together
+        gbc.anchor = GridBagConstraints.WEST;
+        panel.add(apiKeyPanel, gbc);
 
-        JPanel apiUrlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // API Key Field
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 2;
+        panel.add(apiKeyField, gbc);
+
+        // aPI Key Status Label
+        gbc.gridy = 2;
+        panel.add(apiKeyStatusLabel, gbc);
+    }
+
+    /**
+     * Adds the API URL components to the panel.
+     * @param gbc the GridBagConstraints used for layout.
+     */
+    private void addApiUrlComponents(GridBagConstraints gbc) {
+        Font labelFont = new Font("Arial", Font.BOLD, 16);
+
+        gbc.gridx = 0;
+        gbc.gridy = 4;
+        gbc.gridwidth = 1;
         JLabel apiUrlLabel = new JLabel("API URL");
         apiUrlLabel.setFont(labelFont);
-        apiUrlPanel.add(apiUrlLabel);
+        panel.add(apiUrlLabel, gbc);
 
-        panel.add(apiUrlPanel);
-        panel.add(apiUrlField);
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        gbc.gridwidth = 2;
+        panel.add(apiUrlField, gbc);
+    }
 
-        JPanel rulesetPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+    /**
+     * Adds the ruleset components to the panel.
+     * @param gbc the GridBagConstraints used for layout.
+     */
+    private void addRulesetComponents(GridBagConstraints gbc) {
+        Font labelFont = new Font("Arial", Font.BOLD, 16);
+
+        gbc.gridx = 0;
+        gbc.gridy = 7;
+        gbc.gridwidth = 1;
         JLabel rulesetLabel = new JLabel("PMD RULESET");
         rulesetLabel.setFont(labelFont);
-        rulesetPanel.add(rulesetLabel);
+        panel.add(rulesetLabel, gbc);
 
-        panel.add(rulesetPanel);
-        panel.add(new JScrollPane(rulesetArea));
+        gbc.gridx = 0;
+        gbc.gridy = 8;
+        gbc.gridwidth = 2;
+        gbc.weighty = 1.0;
+        gbc.fill = GridBagConstraints.BOTH;
+        panel.add(new JScrollPane(rulesetArea), gbc);
+    }
+
+    /**
+     * Adds vertical space to the panel.
+     * @param gbc the GridBagConstraints used for layout.
+     * @param gridy the grid y position to add the space.
+     */
+    private void addVerticalSpace(GridBagConstraints gbc, int gridy) {
+        gbc.gridy = gridy;
+        gbc.gridwidth = 2;
+        panel.add(Box.createVerticalStrut(10), gbc);
     }
 
     /**
