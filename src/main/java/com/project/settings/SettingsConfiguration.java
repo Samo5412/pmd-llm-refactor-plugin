@@ -1,6 +1,7 @@
 package com.project.settings;
 
 import com.intellij.openapi.options.Configurable;
+import com.project.util.LoggerUtil;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.Nullable;
 
@@ -43,9 +44,13 @@ public class SettingsConfiguration implements Configurable {
      * Loads the settings from the settings manager.
      */
     private void loadSettings() {
-        settingsComponent.setApiKey(settingsManager.getApiKey());
-        settingsComponent.setApiUrlField(settingsManager.getApiUrl());
-        settingsComponent.setRulesetField(settingsManager.getRuleset());
+        try {
+            settingsComponent.setApiKey(settingsManager.getApiKey());
+            settingsComponent.setApiUrlField(settingsManager.getApiUrl());
+            settingsComponent.setRulesetField(settingsManager.getRuleset());
+        } catch (Exception e) {
+            LoggerUtil.error("Error loading settings", e);
+        }
     }
 
     /**
@@ -54,9 +59,14 @@ public class SettingsConfiguration implements Configurable {
      */
     @Override
     public boolean isModified() {
-        return !settingsComponent.getApiKeyField().isEmpty() ||
-                !settingsComponent.getApiUrlField().equals(settingsManager.getApiUrl()) ||
-                !settingsComponent.getRulesetField().equals(settingsManager.getRuleset());
+        try {
+            return !settingsComponent.getApiKeyField().isEmpty() ||
+                    !settingsComponent.getApiUrlField().equals(settingsManager.getApiUrl()) ||
+                    !settingsComponent.getRulesetField().equals(settingsManager.getRuleset());
+        } catch (Exception e) {
+            LoggerUtil.error("Error checking if settings are modified", e);
+            return false;
+        }
     }
 
     /**
@@ -64,24 +74,33 @@ public class SettingsConfiguration implements Configurable {
      */
     @Override
     public void apply() {
-        String newApiKey = settingsComponent.getApiKeyField();
-        String newApiUrl = settingsComponent.getApiUrlField();
-        String newRuleset = settingsComponent.getRulesetField();
+        try {
+            String newApiKey = settingsComponent.getApiKeyField();
+            String newApiUrl = settingsComponent.getApiUrlField();
+            String newRuleset = settingsComponent.getRulesetField();
 
-        if (isApiKeyChanged(newApiKey)) {
-            settingsComponent.showApiKeyUpdatedNotification();
+            if (isApiKeyChanged(newApiKey)) {
+                settingsComponent.showApiKeyUpdatedNotification();
+            }
+
+            settingsManager.setApiKey(newApiKey.isEmpty() ? null : newApiKey);
+            settingsManager.setApiUrl(newApiUrl.isEmpty() ? null : newApiUrl);
+            settingsManager.setRuleset(newRuleset.isEmpty() ? null : newRuleset);
+
+            loadSettings();
+        } catch (Exception e) {
+            LoggerUtil.error("Error applying settings", e);
         }
-
-        settingsManager.setApiKey(newApiKey.isEmpty() ? null : newApiKey);
-        settingsManager.setApiUrl(newApiUrl.isEmpty() ? null : newApiUrl);
-        settingsManager.setRuleset(newRuleset.isEmpty() ? null : newRuleset);
-
-        loadSettings();
     }
 
     private boolean isApiKeyChanged(String newApiKey) {
-        String currentApiKey = settingsManager.getApiKey();
-        return currentApiKey != null && !currentApiKey.isEmpty() && !currentApiKey.equals(newApiKey);
+        try {
+            String currentApiKey = settingsManager.getApiKey();
+            return currentApiKey != null && !currentApiKey.isEmpty() && !currentApiKey.equals(newApiKey);
+        } catch (Exception e) {
+            LoggerUtil.error("Error checking if API key is changed", e);
+            return false;
+        }
     }
 
     /**
@@ -89,8 +108,12 @@ public class SettingsConfiguration implements Configurable {
      */
     @Override
     public void reset() {
-        loadSettings();
-        settingsComponent.getPanel().revalidate();
-        settingsComponent.getPanel().repaint();
+        try {
+            loadSettings();
+            settingsComponent.getPanel().revalidate();
+            settingsComponent.getPanel().repaint();
+        } catch (Exception e) {
+            LoggerUtil.error("Error resetting settings", e);
+        }
     }
 }
