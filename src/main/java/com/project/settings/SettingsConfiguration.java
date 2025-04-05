@@ -1,6 +1,7 @@
 package com.project.settings;
 
 import com.intellij.openapi.options.Configurable;
+import com.project.util.LoggerUtil;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.Nullable;
 
@@ -8,7 +9,6 @@ import javax.swing.*;
 
 /**
  * Provides the configuration settings for the PMD-LLM-Refactor plugin.
- * @author Micael Olsson
  */
 public class SettingsConfiguration implements Configurable {
 
@@ -43,20 +43,36 @@ public class SettingsConfiguration implements Configurable {
      * Loads the settings from the settings manager.
      */
     private void loadSettings() {
-        settingsComponent.setApiKey(settingsManager.getApiKey());
-        settingsComponent.setApiUrlField(settingsManager.getApiUrl());
-        settingsComponent.setRulesetField(settingsManager.getRuleset());
+        try {
+            settingsComponent.setApiKey(settingsManager.getApiKey());
+            settingsComponent.setApiUrlField(settingsManager.getApiUrl());
+            settingsComponent.setRulesetField(settingsManager.getRuleset());
+            settingsComponent.setModelNameField(settingsManager.getModelName());
+            settingsComponent.setTemperatureField(settingsManager.getTemperature());
+            settingsComponent.setTokenAmountField(settingsManager.getTokenAmount());
+        } catch (Exception e) {
+            LoggerUtil.error("Error loading settings", e);
+        }
     }
 
     /**
      * Checks if the settings have been modified.
+     *
      * @return true if the settings have been modified, false otherwise.
      */
     @Override
     public boolean isModified() {
-        return !settingsComponent.getApiKeyField().isEmpty() ||
-                !settingsComponent.getApiUrlField().equals(settingsManager.getApiUrl()) ||
-                !settingsComponent.getRulesetField().equals(settingsManager.getRuleset());
+        try {
+            return !settingsComponent.getApiKeyField().equals(settingsManager.getApiKey()) ||
+                    !settingsComponent.getApiUrlField().equals(settingsManager.getApiUrl()) ||
+                    !settingsComponent.getRulesetField().equals(settingsManager.getRuleset()) ||
+                    !settingsComponent.getModelNameField().equals(settingsManager.getModelName()) ||
+                    !settingsComponent.getTemperatureField().equals(settingsManager.getTemperature()) ||
+                    !settingsComponent.getTokenAmountField().equals(settingsManager.getTokenAmount());
+        } catch (Exception e) {
+            LoggerUtil.error("Error checking if settings are modified", e);
+            return false;
+        }
     }
 
     /**
@@ -64,24 +80,39 @@ public class SettingsConfiguration implements Configurable {
      */
     @Override
     public void apply() {
-        String newApiKey = settingsComponent.getApiKeyField();
-        String newApiUrl = settingsComponent.getApiUrlField();
-        String newRuleset = settingsComponent.getRulesetField();
+        try {
+            String newApiKey = settingsComponent.getApiKeyField();
+            String newApiUrl = settingsComponent.getApiUrlField();
+            String newRuleset = settingsComponent.getRulesetField();
+            String newModelName = settingsComponent.getModelNameField();
+            String newTemperature = settingsComponent.getTemperatureField();
+            String newTokenAmount = settingsComponent.getTokenAmountField();
 
-        if (isApiKeyChanged(newApiKey)) {
-            settingsComponent.showApiKeyUpdatedNotification();
+            if (isApiKeyChanged(newApiKey)) {
+                settingsComponent.showApiKeyUpdatedNotification();
+            }
+
+            settingsManager.setApiKey(newApiKey.isEmpty() ? null : newApiKey);
+            settingsManager.setApiUrl(newApiUrl.isEmpty() ? null : newApiUrl);
+            settingsManager.setRuleset(newRuleset.isEmpty() ? null : newRuleset);
+            settingsManager.setModelName(newModelName.isEmpty() ? null : newModelName);
+            settingsManager.setTemperature(newTemperature.isEmpty() ? null : newTemperature);
+            settingsManager.setTokenAmount(newTokenAmount.isEmpty() ? null : newTokenAmount);
+
+            loadSettings();
+        } catch (Exception e) {
+            LoggerUtil.error("Error applying settings", e);
         }
-
-        settingsManager.setApiKey(newApiKey.isEmpty() ? null : newApiKey);
-        settingsManager.setApiUrl(newApiUrl.isEmpty() ? null : newApiUrl);
-        settingsManager.setRuleset(newRuleset.isEmpty() ? null : newRuleset);
-
-        loadSettings();
     }
 
     private boolean isApiKeyChanged(String newApiKey) {
-        String currentApiKey = settingsManager.getApiKey();
-        return currentApiKey != null && !currentApiKey.isEmpty() && !currentApiKey.equals(newApiKey);
+        try {
+            String currentApiKey = settingsManager.getApiKey();
+            return currentApiKey != null && !currentApiKey.isEmpty() && !currentApiKey.equals(newApiKey);
+        } catch (Exception e) {
+            LoggerUtil.error("Error checking if API key is changed", e);
+            return false;
+        }
     }
 
     /**
@@ -89,8 +120,12 @@ public class SettingsConfiguration implements Configurable {
      */
     @Override
     public void reset() {
-        loadSettings();
-        settingsComponent.getPanel().revalidate();
-        settingsComponent.getPanel().repaint();
+        try {
+            loadSettings();
+            settingsComponent.getPanel().revalidate();
+            settingsComponent.getPanel().repaint();
+        } catch (Exception e) {
+            LoggerUtil.error("Error resetting settings", e);
+        }
     }
 }

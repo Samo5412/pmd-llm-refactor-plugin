@@ -12,6 +12,7 @@ import java.nio.file.Path;
 
 /**
  * Manages the settings for the application, including API key, API URL, and PMD ruleset.
+ * @author Micael Olsson
  */
 public class SettingsManager {
 
@@ -19,6 +20,9 @@ public class SettingsManager {
     private static final String API_KEY = "api_key";
     private static final String API_URL_FILE_NAME = "api_url.txt";
     private static final String RULESET_FILE_NAME = "pmd_ruleset.xml";
+    private static final String MODEL_NAME_FILE_NAME = "model_name.txt";
+    private static final String TEMPERATURE_FILE_NAME = "temperature.txt";
+    private static final String TOKEN_AMOUNT_FILE_NAME = "token_amount.txt";
     private static SettingsManager instance;
 
     /**
@@ -123,6 +127,109 @@ public class SettingsManager {
             Files.writeString(configPath, newRuleset);
         } catch (IOException e) {
             throw new IllegalStateException("Error writing PMD ruleset file.", e);
+        }
+    }
+
+    /**
+     * Retrieves the stored model name.
+     *
+     * @return the model name or null if not set.
+     */
+    public String getModelName() {
+        Path configPath = Path.of(PathManager.getConfigPath(), "pmd", MODEL_NAME_FILE_NAME);
+        try {
+            if (Files.exists(configPath)) {
+                return Files.readString(configPath).trim();
+            }
+            return null;
+        } catch (IOException e) {
+            LoggerUtil.error("Error reading model name file.", e);
+            return null;
+        }
+    }
+
+    /**
+     * Stores the given model name.
+     * @param newModelName the model name to store.
+     */
+    public void setModelName(String newModelName) {
+        if (newModelName == null || newModelName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invalid model name, cannot be empty.");
+        }
+        Path configPath = Path.of(PathManager.getConfigPath(), "pmd", MODEL_NAME_FILE_NAME);
+        try {
+            Files.createDirectories(configPath.getParent());
+            Files.writeString(configPath, newModelName);
+        } catch (IOException e) {
+            throw new IllegalStateException("Error writing model name file.", e);
+        }
+    }
+
+    /**
+     * Retrieves the stored temperature.
+     * @return the temperature or null if not set.
+     */
+    public String getTemperature() {
+        Path configPath = Path.of(PathManager.getConfigPath(), "pmd", TEMPERATURE_FILE_NAME);
+        try {
+            if (Files.exists(configPath)) {
+                return Files.readString(configPath).trim();
+            }
+            return null;
+        } catch (IOException e) {
+            LoggerUtil.error("Error reading temperature file.", e);
+            return null;
+        }
+    }
+
+    /**
+     * Stores the given temperature.
+     * @param newTemperature the temperature to store.
+     */
+    public void setTemperature(String newTemperature) {
+        if (newTemperature == null || newTemperature.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invalid temperature. Cannot be empty.");
+        }
+        Path configPath = Path.of(PathManager.getConfigPath(), "pmd", TEMPERATURE_FILE_NAME);
+        try {
+            Files.createDirectories(configPath.getParent());
+            Files.writeString(configPath, newTemperature);
+        } catch (IOException e) {
+            throw new IllegalStateException("Error writing temperature file.", e);
+        }
+    }
+
+    /**
+     * Retrieves the stored token amount.
+     * @return the token amount or null if not set.
+     */
+    public String getTokenAmount() {
+        Path configPath = Path.of(PathManager.getConfigPath(), "pmd", TOKEN_AMOUNT_FILE_NAME);
+        try {
+            if (Files.exists(configPath)) {
+                return Files.readString(configPath).trim();
+            }
+            return null;
+        } catch (IOException e) {
+            LoggerUtil.error("Error reading token amount file.", e);
+            return null;
+        }
+    }
+
+    /**
+     * Stores the given token amount.
+     * @param newTokenAmount the token amount to store.
+     */
+    public void setTokenAmount(String newTokenAmount) {
+        if (newTokenAmount == null || newTokenAmount.trim().isEmpty()) {
+            throw new IllegalArgumentException("Invalid token amount. Cannot be empty.");
+        }
+        Path configPath = Path.of(PathManager.getConfigPath(), "pmd", TOKEN_AMOUNT_FILE_NAME);
+        try {
+            Files.createDirectories(configPath.getParent());
+            Files.writeString(configPath, newTokenAmount);
+        } catch (IOException e) {
+            throw new IllegalStateException("Error writing token amount file.", e);
         }
     }
 

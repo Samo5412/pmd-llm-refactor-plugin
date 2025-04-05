@@ -2,7 +2,6 @@ package com.project.logic;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.project.model.BatchPreparationResult;
 import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
 import com.project.util.LoggerUtil;

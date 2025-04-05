@@ -18,6 +18,7 @@ import com.project.logic.refactoring.CodeQualityAnalyzer;
 import com.project.logic.refactoring.InMemoryFileStorage;
 import com.project.logic.refactoring.MarkerBlockProcessor;
 import com.project.model.BatchPreparationResult;
+import com.project.settings.SettingsManager;
 import com.project.ui.util.FileAnalysisTracker;
 import com.project.util.LoggerUtil;
 
@@ -241,10 +242,9 @@ public class AnalysisFeatures {
 
                     String prompt = generatePromptFromBatchResult();
 
-                    // TODO: Replace hardcoded model with configurable value from settings
-                    String model = "deepseek/deepseek-chat:free";
-                    int maxTokens = 2000;
-                    double temperature = 0.7;
+                    String model = SettingsManager.getInstance().getModelName();
+                    int maxTokens = Integer.parseInt(SettingsManager.getInstance().getTokenAmount());
+                    double temperature = Double.parseDouble(SettingsManager.getInstance().getTemperature());
 
                     String llmResponse = LLMService.getLLMResponse(prompt, model, maxTokens, temperature);
 
