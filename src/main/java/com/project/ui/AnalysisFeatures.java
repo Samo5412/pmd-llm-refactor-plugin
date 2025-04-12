@@ -9,8 +9,14 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.editor.EditorFactory;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.progress.ProcessCanceledException;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.JBColor;
 import com.project.api.LLMService;
 import com.project.api.RequestStorage;
 import com.project.logic.*;
@@ -21,13 +27,15 @@ import com.project.model.BatchPreparationResult;
 import com.project.settings.SettingsManager;
 import com.project.ui.util.FileAnalysisTracker;
 import com.project.util.LoggerUtil;
+import org.jetbrains.annotations.NotNull;
 
 import javax.swing.*;
-import java.awt.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Handles both PMD analysis and LLM response logic and UI updates.
@@ -73,6 +81,17 @@ public class AnalysisFeatures {
      * Processor for handling marker blocks in code.
      */
     private final MarkerBlockProcessor markerBlockProcessor;
+
+    /**
+     * Timeout duration for LLM requests in seconds.
+     */
+    private static final int LLM_TIMEOUT_SECONDS = 60;
+
+    /**
+     * Flag to indicate if an LLM request is currently in progress.
+     */
+    private static boolean llmRequestInProgress = false;
+
 
     /**
      * Constructor to initialize the analysis features.
@@ -221,66 +240,146 @@ public class AnalysisFeatures {
      * @param project The current IntelliJ project.
      */
     public void showLLMProcessingDialog(Project project) {
-        JDialog loadingDialog = createLoadingDialog();
+        if (isLLMRequestInProgress()) {
+            Messages.showInfoMessage(project,
+                    "Another LLM request is currently in progress. Please wait for it to complete.",
+                    "Request in Progress");
+            return;
+        }
 
-        SwingWorker<String, Void> worker = new SwingWorker<>() {
+        setLLMRequestInProgress(true);
+        pmdButton.setEnabled(false);
+
+        ProgressManager.getInstance().run(new Task.Backgroundable(project, "Sending to LLM...", true) {
+
+            private String llmResponse;
+            private String filePath;
+
             @Override
-            protected String doInBackground() {
-                Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
-                if (fileOpt.isEmpty()) return null;
+            public void run(@NotNull ProgressIndicator indicator) {
+                indicator.setIndeterminate(true);
+                indicator.setText("Sending code for refactoring...");
+                indicator.checkCanceled();
 
-                String filePath = fileOpt.get().getPath();
+                ProgressManager.getInstance().executeNonCancelableSection(() -> {
+                    try {
+                        Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
+                        if (fileOpt.isEmpty()) return;
 
-                String cachedResponse = fileAnalysisTracker.getCachedLLMResponse(filePath);
-                if (cachedResponse != null) {
-                    LoggerUtil.info("Cache hit for file: " + filePath);
-                    return cachedResponse;
-                }
+                        filePath = fileOpt.get().getPath();
+                        llmResponse = requestLLMResponse(indicator);
 
-                try {
-                    long startTime = System.currentTimeMillis();
+                        if (!indicator.isCanceled()) {
+                            fileAnalysisTracker.cacheLLMResponse(filePath, llmResponse);
+                        }
+                    } catch (Exception e) {
+                        LoggerUtil.error("Error in LLM processing: " + e.getMessage(), e);
+                        llmResponse = "An error occurred: " + e.getMessage();
+                    }
+                });
 
-                    String prompt = generatePromptFromBatchResult();
-
-                    String model = SettingsManager.getInstance().getModelName();
-                    int maxTokens = Integer.parseInt(SettingsManager.getInstance().getTokenAmount());
-                    double temperature = Double.parseDouble(SettingsManager.getInstance().getTemperature());
-
-                    String llmResponse = LLMService.getLLMResponse(prompt, model, maxTokens, temperature);
-
-                    // End timing here and log
-                    long elapsedTime = System.currentTimeMillis() - startTime;
-                    LoggerUtil.info("LLM processing took: " + elapsedTime + " ms");
-
-                    fileAnalysisTracker.cacheLLMResponse(filePath, llmResponse);
-
-                    return llmResponse;
-
-                } catch (Exception e) {
-                    LoggerUtil.error("Error calling LLM service: " + e.getMessage(), e);
-                    return "An error occurred while fetching the LLM response: " + e.getMessage();
+                if (indicator.isCanceled()) {
+                    throw new ProcessCanceledException();
                 }
             }
 
             @Override
-            protected void done() {
-                try {
-                    String llmResponse = get();
-                    if (llmResponse != null) {
+            public void onSuccess() {
+                if (llmResponse != null) {
+                    if (isErrorResponse(llmResponse)) {
+                        handleErrorResponse(project, llmResponse);
+                    } else {
                         displayLLMResponse(project, llmResponse);
                         updateButtonToViewDiff(project);
+                        feedbackPanel.setVisible(true);
                     }
-                    feedbackPanel.setVisible(true);
-                } catch (InterruptedException | ExecutionException e) {
-                    LoggerUtil.error("Error retrieving LLM response in done(): " + e.getMessage(), e);
-                    Thread.currentThread().interrupt();
-                } finally {
-                    loadingDialog.dispose();
                 }
+                resetUIState();
             }
-        };
-        worker.execute();
-        loadingDialog.setVisible(true);
+
+            @Override
+            public void onCancel() {
+                if (filePath != null) {
+                    fileAnalysisTracker.invalidateLLMResponse(filePath);
+                    llmResponseTextArea.setText("LLM request cancelled.");
+                    fileAnalysisTracker.cacheLLMResponse(filePath, "LLM request cancelled.");
+                }
+                RequestStorage.clearCodeSnippets();
+                statusLabel.setText("LLM processing was cancelled.");
+                resetUIState();
+            }
+        });
+    }
+
+
+    /**
+     * Requests a response from the LLM service.
+     *
+     * @param indicator The progress indicator for the request.
+     * @return The LLM response as a string.
+     */
+    private String requestLLMResponse(ProgressIndicator indicator) {
+        String prompt = generatePromptFromBatchResult();
+        String model = SettingsManager.getInstance().getModelName();
+        int maxTokens = Integer.parseInt(SettingsManager.getInstance().getTokenAmount());
+        double temperature = Double.parseDouble(SettingsManager.getInstance().getTemperature());
+
+        indicator.setText("Waiting for LLM response (timeout: " + LLM_TIMEOUT_SECONDS + "s)...");
+
+        final CompletableFuture<String> futureResponse = CompletableFuture.supplyAsync(
+                () -> LLMService.getLLMResponse(prompt, model, maxTokens, temperature)
+        );
+
+        try {
+            long startTime = System.currentTimeMillis();
+            String response = futureResponse.get(LLM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            long elapsedTime = System.currentTimeMillis() - startTime;
+            LoggerUtil.info("LLM processing took: " + elapsedTime + " ms");
+            return response;
+        } catch (TimeoutException e) {
+            futureResponse.cancel(true);
+            LoggerUtil.error("LLM request timed out after " + LLM_TIMEOUT_SECONDS + " seconds", e);
+            return "LLM request timed out after " + LLM_TIMEOUT_SECONDS + " seconds. Please try again.";
+        } catch (Exception e) {
+            LoggerUtil.error("Error getting LLM response", e);
+            return "Error: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Checks if the response from the LLM is an error message.
+     *
+     * @param response The LLM response to check.
+     * @return true if the response indicates an error, false otherwise.
+     */
+    private boolean isErrorResponse(String response) {
+        return response.startsWith("Error:") ||
+                response.startsWith("Network Error:") ||
+                response.startsWith("An error occurred:") ||
+                response.startsWith("LLM request timed out") ||
+                response.startsWith("API Error");
+    }
+
+    /**
+     * Handles error responses from the LLM.
+     *
+     * @param project The current IntelliJ project.
+     * @param errorMessage The error message to display.
+     */
+    private void handleErrorResponse(Project project, String errorMessage) {
+        ApplicationManager.getApplication().invokeLater(() -> {
+            Messages.showErrorDialog(project, errorMessage, "LLM Response Error");
+        });
+        llmResponseTextArea.setText(errorMessage);
+        llmResponseTextArea.setCaretPosition(0);
+    }
+
+    /**
+     * Resets the UI state after LLM processing.
+     */
+    private void resetUIState() {
+        setLLMRequestInProgress(false);
+        pmdButton.setEnabled(true);
     }
 
     /**
@@ -395,27 +494,6 @@ public class AnalysisFeatures {
     }
 
     /**
-     * Creates and configures the loading dialog.
-     *
-     * @return Configured JDialog for loading indication.
-     */
-    private JDialog createLoadingDialog() {
-        JDialog loadingDialog = new JDialog();
-        loadingDialog.setTitle("Sending to LLM...");
-        loadingDialog.setModal(true);
-        loadingDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-        loadingDialog.setSize(350, 100);
-        loadingDialog.setLocationRelativeTo(null);
-        loadingDialog.setLayout(new BorderLayout());
-
-        JLabel label = new JLabel("Sending code for refactoring...");
-        label.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
-        loadingDialog.add(label, BorderLayout.CENTER);
-
-        return loadingDialog;
-    }
-
-    /**
      * Updates the PMD button to clearly show cached LLM response (diff mode).
      * @param project The current IntelliJ project.
      */
@@ -485,5 +563,23 @@ public class AnalysisFeatures {
         showLLMProcessingDialog(project);
 
         statusLabel.setText("Regenerating fresh LLM response...");
+    }
+
+    /**
+     * Checks if an LLM request is currently in progress.
+     *
+     * @return true if an LLM request is in progress, false otherwise.
+     */
+    public static boolean isLLMRequestInProgress() {
+        return llmRequestInProgress;
+    }
+
+    /**
+     * Sets the LLM request in progress flag.
+     *
+     * @param inProgress The new state of the LLM request in progress flag.
+     */
+    private static synchronized void setLLMRequestInProgress(boolean inProgress) {
+        llmRequestInProgress = inProgress;
     }
 }

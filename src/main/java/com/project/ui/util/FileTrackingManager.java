@@ -14,6 +14,7 @@ import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -51,16 +52,22 @@ public class FileTrackingManager {
      * List of listeners to be notified of file content changes.
      */
     protected final List<FileContentChangeListener> fileContentChangeListeners = new ArrayList<>();
-    
+
+    /**
+     * Text area to display the LLM response.
+     */
+    private final JTextArea llmResponseTextArea;
+
     /**
      * Constructs a new FileTrackingManager.
      *
      * @param project The current IntelliJ project.
      * @param fileAnalysisTracker The tracker for file analysis results.
      */
-    public FileTrackingManager(Project project, FileAnalysisTracker fileAnalysisTracker) {
+    public FileTrackingManager(Project project, FileAnalysisTracker fileAnalysisTracker, JTextArea llmResponseTextArea) {
         this.project = project;
         this.fileAnalysisTracker = fileAnalysisTracker;
+        this.llmResponseTextArea = llmResponseTextArea;
         this.disposable = Disposer.newDisposable();
         Disposer.register(project, disposable);
 
@@ -90,10 +97,29 @@ public class FileTrackingManager {
 
                     @Override
                     public void selectionChanged(@NotNull FileEditorManagerEvent event) {
-                        notifyListeners();
+                        if (event.getNewFile() != null) {
+                            updateLLMResponseForCurrentFile(event.getNewFile().getPath());
+                            notifyListeners();
+                        }
                     }
                 }
         );
+    }
+
+    /**
+     * Updates the LLM response text area with the cached response for the current file.
+     *
+     * @param filePath The path of the current file.
+     */
+    private void updateLLMResponseForCurrentFile(String filePath) {
+        if (filePath != null && llmResponseTextArea != null) {
+            String cachedResponse = fileAnalysisTracker.getCachedLLMResponse(filePath);
+            if (cachedResponse != null) {
+                llmResponseTextArea.setText(cachedResponse);
+            } else {
+                llmResponseTextArea.setText("");
+            }
+        }
     }
 
     /**

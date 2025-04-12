@@ -31,8 +31,16 @@ public class ApiResponseHandler {
     public static String extractResponseText(String jsonResponse) {
         try {
             JsonNode rootNode = objectMapper.readTree(jsonResponse);
-            JsonNode choices = rootNode.path("choices");
 
+            JsonNode errorNode = rootNode.path("error");
+            if (!errorNode.isMissingNode()) {
+                String errorMessage = errorNode.path("message").asText("Unknown error");
+                String errorCode = errorNode.path("code").asText("");
+
+                return "API Error (" + errorCode + "): " + errorMessage;
+            }
+
+            JsonNode choices = rootNode.path("choices");
             if (!choices.isArray() || choices.isEmpty()) {
                 throw new ApiResponseException("Invalid API response: Missing 'choices' field.");
             }

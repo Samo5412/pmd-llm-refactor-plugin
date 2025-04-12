@@ -112,7 +112,7 @@ public class PluginToolWindowFactory implements ToolWindowFactory,
         analysisFeatures = new AnalysisFeatures(resultTextArea, llmResponseTextArea, fileAnalysisTracker, pmdButton, statusLabel, feedbackPanel);
 
         // Initialize file tracking manager and register as listener
-        fileTrackingManager = new FileTrackingManager(project, fileAnalysisTracker);
+        fileTrackingManager = new FileTrackingManager(project, fileAnalysisTracker, llmResponseTextArea);
         fileTrackingManager.addFileChangeListener(this);
         fileTrackingManager.addFileContentChangeListener(this);
     }
@@ -157,21 +157,32 @@ public class PluginToolWindowFactory implements ToolWindowFactory,
             String cachedLLMResponse = fileAnalysisTracker.getCachedLLMResponse(filePath);
             if (cachedLLMResponse != null) {
                 llmResponseTextArea.setText(cachedLLMResponse);
-                regenerateLLMButton.setVisible(true);
-            } else {
-                regenerateLLMButton.setVisible(false);
-            }
 
-            if (hasIssues) {
-                if (cachedLLMResponse != null && !cachedLLMResponse.isEmpty()) {
-                    analysisFeatures.updateButtonToViewDiff(project); // clearly sets "View Diff"
-                    feedbackPanel.setVisible(true);
+                // Check if this was a canceled request
+                boolean wasCanceled = cachedLLMResponse.contains("LLM request cancelled");
+
+                if (hasIssues) {
+                    if (!wasCanceled && !cachedLLMResponse.isEmpty()) {
+                        analysisFeatures.updateButtonToViewDiff(project);
+                        feedbackPanel.setVisible(true);
+                        regenerateLLMButton.setVisible(true);
+                    } else {
+                        analysisFeatures.updateButtonForLLMResponse(project);
+                        feedbackPanel.setVisible(false);
+                        regenerateLLMButton.setVisible(false);
+                    }
                 } else {
-                    analysisFeatures.updateButtonForLLMResponse(project);
+                    analysisFeatures.resetToAnalyzeMode(project);
                     feedbackPanel.setVisible(false);
                 }
             } else {
-                analysisFeatures.resetToAnalyzeMode(project);
+                regenerateLLMButton.setVisible(false);
+
+                if (hasIssues) {
+                    analysisFeatures.updateButtonForLLMResponse(project);
+                } else {
+                    analysisFeatures.resetToAnalyzeMode(project);
+                }
                 feedbackPanel.setVisible(false);
             }
         } else {
