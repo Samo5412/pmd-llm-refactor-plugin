@@ -169,6 +169,7 @@ public class PluginToolWindowFactory implements ToolWindowFactory,
                     } else {
                         analysisFeatures.updateButtonForLLMResponse(project);
                         feedbackPanel.setVisible(false);
+                        regenerateLLMButton.setVisible(false);
                     }
                 } else {
                     analysisFeatures.resetToAnalyzeMode(project);
