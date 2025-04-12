@@ -16,7 +16,6 @@ import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.ui.JBColor;
 import com.project.api.LLMService;
 import com.project.api.RequestStorage;
 import com.project.logic.*;
@@ -92,6 +91,10 @@ public class AnalysisFeatures {
      */
     private static boolean llmRequestInProgress = false;
 
+    /**
+     * Future representing the current LLM request.
+     */
+    private CompletableFuture<String> currentLLMRequest;
 
     /**
      * Constructor to initialize the analysis features.
@@ -259,29 +262,28 @@ public class AnalysisFeatures {
             public void run(@NotNull ProgressIndicator indicator) {
                 indicator.setIndeterminate(true);
                 indicator.setText("Sending code for refactoring...");
-                indicator.checkCanceled();
 
-                ProgressManager.getInstance().executeNonCancelableSection(() -> {
-                    try {
-                        Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
-                        if (fileOpt.isEmpty()) return;
+                try {
+                    Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
+                    if (fileOpt.isEmpty()) return;
 
-                        filePath = fileOpt.get().getPath();
-                        llmResponse = requestLLMResponse(indicator);
+                    filePath = fileOpt.get().getPath();
+                    llmResponse = requestLLMResponse(indicator);
 
-                        if (!indicator.isCanceled()) {
-                            fileAnalysisTracker.cacheLLMResponse(filePath, llmResponse);
-                        }
-                    } catch (Exception e) {
-                        LoggerUtil.error("Error in LLM processing: " + e.getMessage(), e);
-                        llmResponse = "An error occurred: " + e.getMessage();
+                    if (!indicator.isCanceled()) {
+                        fileAnalysisTracker.cacheLLMResponse(filePath, llmResponse);
                     }
-                });
+                } catch (Exception e) {
+                    LoggerUtil.error("Error in LLM processing: " + e.getMessage(), e);
+                    llmResponse = "An error occurred: " + e.getMessage();
+                }
 
                 if (indicator.isCanceled()) {
                     throw new ProcessCanceledException();
                 }
             }
+
+
 
             @Override
             public void onSuccess() {
@@ -299,6 +301,11 @@ public class AnalysisFeatures {
 
             @Override
             public void onCancel() {
+                if (currentLLMRequest != null && !currentLLMRequest.isDone()) {
+                    currentLLMRequest.cancel(true);
+                    LoggerUtil.info("LLM request cancelled by user");
+                }
+
                 if (filePath != null) {
                     fileAnalysisTracker.invalidateLLMResponse(filePath);
                     llmResponseTextArea.setText("LLM request cancelled.");
@@ -326,18 +333,26 @@ public class AnalysisFeatures {
 
         indicator.setText("Waiting for LLM response (timeout: " + LLM_TIMEOUT_SECONDS + "s)...");
 
-        final CompletableFuture<String> futureResponse = CompletableFuture.supplyAsync(
+        currentLLMRequest = CompletableFuture.supplyAsync(
                 () -> LLMService.getLLMResponse(prompt, model, maxTokens, temperature)
         );
 
         try {
+            while (!currentLLMRequest.isDone()) {
+                if (indicator.isCanceled()) {
+                    currentLLMRequest.cancel(true);
+                    return "LLM request cancelled.";
+                }
+                Thread.sleep(100);
+            }
+
             long startTime = System.currentTimeMillis();
-            String response = futureResponse.get(LLM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            String response = currentLLMRequest.get(LLM_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             long elapsedTime = System.currentTimeMillis() - startTime;
             LoggerUtil.info("LLM processing took: " + elapsedTime + " ms");
             return response;
         } catch (TimeoutException e) {
-            futureResponse.cancel(true);
+            currentLLMRequest.cancel(true);
             LoggerUtil.error("LLM request timed out after " + LLM_TIMEOUT_SECONDS + " seconds", e);
             return "LLM request timed out after " + LLM_TIMEOUT_SECONDS + " seconds. Please try again.";
         } catch (Exception e) {
@@ -367,9 +382,7 @@ public class AnalysisFeatures {
      * @param errorMessage The error message to display.
      */
     private void handleErrorResponse(Project project, String errorMessage) {
-        ApplicationManager.getApplication().invokeLater(() -> {
-            Messages.showErrorDialog(project, errorMessage, "LLM Response Error");
-        });
+        ApplicationManager.getApplication().invokeLater(() -> Messages.showErrorDialog(project, errorMessage, "LLM Response Error"));
         llmResponseTextArea.setText(errorMessage);
         llmResponseTextArea.setCaretPosition(0);
     }
