@@ -1,4 +1,4 @@
-package com.project.ui;
+package com.project.ui.userfeedback;
 
 import com.intellij.openapi.application.PathManager;
 import com.project.util.LoggerUtil;

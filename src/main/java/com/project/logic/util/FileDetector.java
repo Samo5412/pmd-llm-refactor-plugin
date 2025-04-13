@@ -1,4 +1,4 @@
-package com.project.logic;
+package com.project.logic.util;
 
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent;

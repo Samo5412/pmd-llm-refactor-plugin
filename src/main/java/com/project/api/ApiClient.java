@@ -2,7 +2,7 @@ package com.project.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.project.settings.SettingsManager;
+import com.project.ui.settings.SettingsManager;
 import com.project.exception.ApiRequestException;
 import com.project.exception.ApiResponseException;
 import com.project.exception.MissingAPIKeyException;

@@ -1,4 +1,4 @@
-package com.project.ui;
+package com.project.ui.userfeedback;
 
 import com.intellij.openapi.application.PathManager;
 import com.project.api.RequestStorage;
@@ -39,7 +39,7 @@ public class UserFeedback {
      * Creates a panel with feedback buttons and an email button.
      * @return A JPanel containing the feedback UI elements.
      */
-    static JPanel createFeedbackPanel() {
+    public static JPanel createFeedbackPanel() {
         JPanel feedbackPanel = new JPanel();
         feedbackPanel.setLayout(new BoxLayout(feedbackPanel, BoxLayout.Y_AXIS));
 

@@ -1,6 +1,5 @@
-package com.project.logic;
+package com.project.logic.refactoring;
 
-import com.project.logic.refactoring.RefactoringObjectiveProvider;
 import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
 import com.project.util.LoggerUtil;

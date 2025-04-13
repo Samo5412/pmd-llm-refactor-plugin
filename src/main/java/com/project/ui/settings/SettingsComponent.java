@@ -1,4 +1,4 @@
-package com.project.settings;
+package com.project.ui.settings;
 
 import com.intellij.util.ui.JBUI;
 

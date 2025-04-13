@@ -19,12 +19,12 @@
         <toolWindow
                 id="PMD-LLM-Refactor"
                 anchor="right"
-                factoryClass="com.project.ui.PluginToolWindowFactory"
+                factoryClass="com.project.ui.core.PluginToolWindowFactory"
                 secondary="false"
                 canCloseContents="false"
                 />
 
-        <applicationConfigurable instance="com.project.settings.SettingsConfiguration"
+        <applicationConfigurable instance="com.project.ui.settings.SettingsConfiguration"
                                  id="com.project.settings"
                                  displayName="PMD-LLM-Refactor: Plugin Configuration"
                                  groupId="tools"
@@ -33,7 +33,7 @@
 
     <application-components>
         <component>
-            <implementation-class>com.project.settings.SettingsManager</implementation-class>
+            <implementation-class>com.project.ui.settings.SettingsManager</implementation-class>
         </component>
     </application-components>
 

@@ -1,4 +1,4 @@
-package com.project.ui;
+package com.project.ui.core;
 
 import com.github.javaparser.JavaParser;
 import com.intellij.diff.DiffContentFactory;
@@ -18,12 +18,14 @@ import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.project.api.LLMService;
 import com.project.api.RequestStorage;
-import com.project.logic.*;
-import com.project.logic.refactoring.CodeQualityAnalyzer;
-import com.project.logic.refactoring.InMemoryFileStorage;
-import com.project.logic.refactoring.MarkerBlockProcessor;
+import com.project.logic.analysis.PMDAnalyzer;
+import com.project.logic.analysis.PMDRunner;
+import com.project.logic.analysis.ViolationExtractor;
+import com.project.logic.parsing.CodeParser;
+import com.project.logic.refactoring.*;
+import com.project.logic.util.FileDetector;
 import com.project.model.BatchPreparationResult;
-import com.project.settings.SettingsManager;
+import com.project.ui.settings.SettingsManager;
 import com.project.ui.util.FileAnalysisTracker;
 import com.project.util.LoggerUtil;
 import org.jetbrains.annotations.NotNull;

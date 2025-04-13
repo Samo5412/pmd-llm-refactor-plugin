@@ -5,13 +5,12 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.project.ProjectManager;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.project.logic.CodeParser;
-import com.project.logic.PMDRunner;
-import com.project.logic.ResponseFormatter;
-import com.project.logic.ViolationExtractor;
+import com.project.logic.parsing.CodeParser;
+import com.project.logic.analysis.PMDRunner;
+import com.project.logic.analysis.ViolationExtractor;
 import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
-import com.project.ui.CodeQualityResultDialog;
+import com.project.ui.core.CodeQualityResultDialog;
 import com.project.util.LoggerUtil;
 
 import java.nio.file.Files;

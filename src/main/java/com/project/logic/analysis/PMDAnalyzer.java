@@ -1,7 +1,9 @@
-package com.project.logic;
+package com.project.logic.analysis;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.project.logic.parsing.CodeParser;
+import com.project.logic.refactoring.ResponseFormatter;
 import com.project.model.CodeBlockInfo;
 import com.project.model.Violation;
 import com.project.util.LoggerUtil;
