@@ -1,4 +1,4 @@
-package com.project.settings;
+package com.project.ui.settings;
 
 import com.intellij.openapi.options.Configurable;
 import com.project.util.LoggerUtil;

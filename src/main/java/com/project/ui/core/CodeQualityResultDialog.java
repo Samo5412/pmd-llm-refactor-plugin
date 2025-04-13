@@ -1,4 +1,4 @@
-package com.project.ui;
+package com.project.ui.core;
 
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.project.Project;

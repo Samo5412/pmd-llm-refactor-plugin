@@ -1,4 +1,4 @@
-package com.project.ui;
+package com.project.ui.core;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -8,6 +8,7 @@ import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBScrollPane;
 import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
+import com.project.ui.userfeedback.UserFeedback;
 import com.project.ui.util.FileAnalysisTracker;
 import com.project.ui.util.FileChangeListener;
 import com.project.ui.util.FileContentChangeListener;

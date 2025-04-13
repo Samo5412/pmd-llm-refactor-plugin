@@ -1,6 +1,6 @@
 package com.project.api;
 
-import com.project.settings.SettingsManager;
+import com.project.ui.settings.SettingsManager;
 import com.project.exception.ApiResponseException;
 import com.project.exception.MissingAPIKeyException;
 import org.junit.jupiter.api.AfterEach;
@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * @author Sara Mousssa.
  */
-public class ApiClientTest {
+class ApiClientTest {
 
     /**
      * Tests API key retrieval from environment loader.

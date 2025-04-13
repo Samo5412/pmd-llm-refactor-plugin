@@ -1,4 +1,4 @@
-package com.project.logic;
+package com.project.logic.parsing;
 
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;

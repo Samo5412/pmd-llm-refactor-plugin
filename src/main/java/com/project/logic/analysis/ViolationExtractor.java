@@ -1,4 +1,4 @@
-package com.project.logic;
+package com.project.logic.analysis;
 
 import com.project.model.Violation;
 import com.project.util.LoggerUtil;

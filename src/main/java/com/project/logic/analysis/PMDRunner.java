@@ -1,4 +1,4 @@
-package com.project.logic;
+package com.project.logic.analysis;
 
 import com.intellij.openapi.application.PathManager;
 import com.project.util.LoggerUtil;
