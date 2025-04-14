@@ -26,6 +26,7 @@ import com.project.logic.refactoring.*;
 import com.project.logic.util.FileDetector;
 import com.project.model.BatchPreparationResult;
 import com.project.ui.settings.SettingsManager;
+import com.project.ui.settings.ValidationSettings;
 import com.project.ui.util.FileAnalysisTracker;
 import com.project.util.LoggerUtil;
 import org.jetbrains.annotations.NotNull;
@@ -270,7 +271,7 @@ public class AnalysisFeatures {
                     if (fileOpt.isEmpty()) return;
 
                     filePath = fileOpt.get().getPath();
-                    llmResponse = requestLLMResponse(indicator);
+                    llmResponse = requestLLMResponse(indicator, project);
 
                     if (!indicator.isCanceled()) {
                         fileAnalysisTracker.cacheLLMResponse(filePath, llmResponse);
@@ -320,18 +321,41 @@ public class AnalysisFeatures {
         });
     }
 
-
     /**
      * Requests a response from the LLM service.
      *
      * @param indicator The progress indicator for the request.
      * @return The LLM response as a string.
      */
-    private String requestLLMResponse(ProgressIndicator indicator) {
+    private String requestLLMResponse(ProgressIndicator indicator, Project project) {
         String prompt = generatePromptFromBatchResult();
-        String model = SettingsManager.getInstance().getModelName();
-        int maxTokens = Integer.parseInt(SettingsManager.getInstance().getTokenAmount());
-        double temperature = Double.parseDouble(SettingsManager.getInstance().getTemperature());
+
+        // Validate model name
+        ValidationSettings modelResult = SettingsManager.getInstance().validateModelName(project);
+        if (!modelResult.isValid()) {
+            return "Error: " + modelResult.getErrorMessage();
+        }
+        String model = modelResult.getValue();
+
+        // Validate token amount
+        ValidationSettings tokenResult = SettingsManager.getInstance().validateTokenAmount(project);
+        if (!tokenResult.isValid()) {
+            return "Error: " + tokenResult.getErrorMessage();
+        }
+        int maxTokens = tokenResult.getValue();
+
+        // Validate temperature
+        ValidationSettings temperatureResult = SettingsManager.getInstance().validateTemperature(project);
+        if (!temperatureResult.isValid()) {
+            return "Error: " + temperatureResult.getErrorMessage();
+        }
+        double temperature = temperatureResult.getValue();
+
+        // Validate API key
+        ValidationSettings apiKeyResult = SettingsManager.getInstance().validateApiKey(project);
+        if (!apiKeyResult.isValid()) {
+            return "Error: " + apiKeyResult.getErrorMessage();
+        }
 
         indicator.setText("Waiting for LLM response (timeout: " + LLM_TIMEOUT_SECONDS + "s)...");
 
