@@ -305,4 +305,11 @@ public class SettingsComponent {
                 "API Key Updated",
                 JOptionPane.INFORMATION_MESSAGE);
     }
+
+    /**
+     * Disables the API URL field since it's fixed.
+     */
+    public void disableApiUrlField() {
+        apiUrlField.setEnabled(false);
+    }
 }

@@ -12,7 +12,14 @@ import javax.swing.*;
  */
 public class SettingsConfiguration implements Configurable {
 
+    /**
+     * The settings component UI.
+     */
     private SettingsComponent settingsComponent;
+
+    /**
+     * The settings manager instance.
+     */
     private final SettingsManager settingsManager = SettingsManager.getInstance();
 
     /**
@@ -35,6 +42,7 @@ public class SettingsConfiguration implements Configurable {
         if (settingsComponent == null) {
             settingsComponent = new SettingsComponent();
             loadSettings();
+            settingsComponent.disableApiUrlField();
         }
         return settingsComponent.getPanel();
     }
@@ -44,7 +52,8 @@ public class SettingsConfiguration implements Configurable {
      */
     private void loadSettings() {
         try {
-            settingsComponent.setApiKey(settingsManager.getApiKey());
+            String key = SettingsManager.getInstance().fetchApiKey();
+            settingsComponent.setApiKey(key);
             settingsComponent.setApiUrlField(settingsManager.getApiUrl());
             settingsComponent.setRulesetField(settingsManager.getRuleset());
             settingsComponent.setModelNameField(settingsManager.getModelName());
@@ -63,7 +72,7 @@ public class SettingsConfiguration implements Configurable {
     @Override
     public boolean isModified() {
         try {
-            return !settingsComponent.getApiKeyField().equals(settingsManager.getApiKey()) ||
+            return !settingsComponent.getApiKeyField().equals(settingsManager.fetchApiKey()) ||
                     !settingsComponent.getApiUrlField().equals(settingsManager.getApiUrl()) ||
                     !settingsComponent.getRulesetField().equals(settingsManager.getRuleset()) ||
                     !settingsComponent.getModelNameField().equals(settingsManager.getModelName()) ||
@@ -82,7 +91,6 @@ public class SettingsConfiguration implements Configurable {
     public void apply() {
         try {
             String newApiKey = settingsComponent.getApiKeyField();
-            String newApiUrl = settingsComponent.getApiUrlField();
             String newRuleset = settingsComponent.getRulesetField();
             String newModelName = settingsComponent.getModelNameField();
             String newTemperature = settingsComponent.getTemperatureField();
@@ -93,7 +101,6 @@ public class SettingsConfiguration implements Configurable {
             }
 
             settingsManager.setApiKey(newApiKey.isEmpty() ? null : newApiKey);
-            settingsManager.setApiUrl(newApiUrl.isEmpty() ? null : newApiUrl);
             settingsManager.setRuleset(newRuleset.isEmpty() ? null : newRuleset);
             settingsManager.setModelName(newModelName.isEmpty() ? null : newModelName);
             settingsManager.setTemperature(newTemperature.isEmpty() ? null : newTemperature);
@@ -105,10 +112,16 @@ public class SettingsConfiguration implements Configurable {
         }
     }
 
+    /**
+     * Checks if the API key has changed.
+     *
+     * @param newApiKey The new API key.
+     * @return true if the API key has changed, false otherwise.
+     */
     private boolean isApiKeyChanged(String newApiKey) {
         try {
-            String currentApiKey = settingsManager.getApiKey();
-            return currentApiKey != null && !currentApiKey.isEmpty() && !currentApiKey.equals(newApiKey);
+            String currentApiKey = settingsManager.fetchApiKey();
+            return !currentApiKey.isEmpty() && !currentApiKey.equals(newApiKey);
         } catch (Exception e) {
             LoggerUtil.error("Error checking if API key is changed", e);
             return false;
@@ -122,6 +135,7 @@ public class SettingsConfiguration implements Configurable {
     public void reset() {
         try {
             loadSettings();
+            settingsComponent.disableApiUrlField();
             settingsComponent.getPanel().revalidate();
             settingsComponent.getPanel().repaint();
         } catch (Exception e) {

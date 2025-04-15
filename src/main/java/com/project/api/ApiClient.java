@@ -53,8 +53,8 @@ public class ApiClient {
      * @throws MissingAPIKeyException if the API key is missing.
      */
     public static String getApiKey() {
-        String apiKey = useEnvLoader ? EnvLoader.getOpenRouterApiKey() : settingsManager.getApiKey();
-        if (apiKey == null || apiKey.isEmpty()) {
+        String apiKey = useEnvLoader ? EnvLoader.getOpenRouterApiKey() : settingsManager.fetchApiKey();
+        if (apiKey.isEmpty()) {
             throw new MissingAPIKeyException("API key is missing. Please check your settings.");
         }
         return apiKey;
