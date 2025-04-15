@@ -290,9 +290,17 @@ public final class SettingsManager implements PersistentStateComponent<SettingsM
      * @return ValidationResult with API key if valid
      */
     public ValidationSettings validateApiKey(Project project) {
-        String apiKey = fetchApiKey();
+        String apiKey = cachedApiKey.get();
+
         if (apiKey.isEmpty()) {
-            showSettingsRequiredNotification(project, "API Key is required", "Please set an API key in settings.");
+            apiKey = retrieveApiKeyFromPasswordSafe();
+            if (!apiKey.isEmpty()) {
+                cachedApiKey.set(apiKey);
+            }
+        }
+        if (apiKey.isEmpty()) {
+            showSettingsRequiredNotification(project, "API Key is required",
+                    "Please set an API key in settings.");
             return ValidationSettings.invalid("API Key is required");
         }
         return ValidationSettings.valid(apiKey);
