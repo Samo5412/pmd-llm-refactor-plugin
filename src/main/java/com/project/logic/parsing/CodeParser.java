@@ -82,7 +82,9 @@ public class CodeParser {
             }
 
             RequestStorage.clearCodeSnippets();
-            blocksInfo.forEach(block -> RequestStorage.addCodeSnippet(block.codeSnippet()));
+            blocksInfo.stream()
+                    .filter(block -> block.violations() != null && !block.violations().isEmpty())
+                    .forEach(block -> RequestStorage.addCodeSnippet(block.codeSnippet()));
 
             LoggerUtil.info("Extracted " + blocksInfo.size() + " code blocks from " + filePath);
         } catch (Exception e) {

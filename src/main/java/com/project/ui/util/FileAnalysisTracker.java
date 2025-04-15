@@ -29,6 +29,12 @@ public class FileAnalysisTracker {
     private final Map<String, String> llmResponseCache;
 
     /**
+     * Cache for extracted snippets.
+     * Key: File path, Value: Extracted snippet string.
+     */
+    private final Map<String, String> extractedSnippetCache = new HashMap<>();
+
+    /**
      * Constructs a new FileAnalysisTracker with initialized caches.
      */
     public FileAnalysisTracker() {
@@ -109,5 +115,25 @@ public class FileAnalysisTracker {
         if (filePath != null) {
             llmResponseCache.remove(filePath);
         }
+    }
+
+    /**
+     * Caches the extracted snippet for a file.
+     *
+     * @param filePath the path of the file
+     * @param snippet the extracted snippet
+     */
+    public void cacheExtractedSnippet(String filePath, String snippet) {
+        extractedSnippetCache.put(filePath, snippet);
+    }
+
+    /**
+     * Retrieves the cached extracted snippet associated with a file.
+     *
+     * @param filePath the path of the file whose snippet is to be retrieved
+     * @return the cached snippet for the file, or null if no snippet is cached
+     */
+    public String getCachedExtractedSnippet(String filePath) {
+        return extractedSnippetCache.get(filePath);
     }
 }
