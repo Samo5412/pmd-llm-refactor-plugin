@@ -25,6 +25,7 @@ import com.project.logic.parsing.CodeParser;
 import com.project.logic.refactoring.*;
 import com.project.logic.util.FileDetector;
 import com.project.model.BatchPreparationResult;
+import com.project.model.CodeBlockInfo;
 import com.project.ui.settings.SettingsManager;
 import com.project.ui.settings.ValidationSettings;
 import com.project.ui.util.FileAnalysisTracker;
@@ -176,6 +177,12 @@ public class AnalysisFeatures {
 
             InMemoryFileStorage storage = ApplicationManager.getApplication().getService(InMemoryFileStorage.class);
             storage.storeOriginalVersion(file, markedContent);
+            String snippet = String.join("\n", lastBatchResult.allBlocks().stream()
+                    .filter(block -> block.violations() != null && !block.violations().isEmpty())
+                    .map(CodeBlockInfo::codeSnippet)
+                    .toList());
+
+            fileAnalysisTracker.cacheExtractedSnippet(file.getPath(), snippet);
             LoggerUtil.info("Marked version of file stored in memory:" + markedContent);
         } catch (Exception e) {
             LoggerUtil.error("Failed to store marked version: " + e.getMessage(), e);
@@ -253,13 +260,20 @@ public class AnalysisFeatures {
             return;
         }
 
+        Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
+        if (fileOpt.isEmpty()) {
+            Messages.showInfoMessage(project, "No Java file selected.", "File Selection Error");
+            return;
+        }
+
+        final VirtualFile targetFile = fileOpt.get();
+        final String filePath = targetFile.getPath();
+
         setLLMRequestInProgress(true);
         pmdButton.setEnabled(false);
 
         ProgressManager.getInstance().run(new Task.Backgroundable(project, "Sending to LLM...", true) {
-
             private String llmResponse;
-            private String filePath;
 
             @Override
             public void run(@NotNull ProgressIndicator indicator) {
@@ -267,11 +281,7 @@ public class AnalysisFeatures {
                 indicator.setText("Sending code for refactoring...");
 
                 try {
-                    Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
-                    if (fileOpt.isEmpty()) return;
-
-                    filePath = fileOpt.get().getPath();
-                    llmResponse = requestLLMResponse(indicator, project);
+                    llmResponse = requestLLMResponse(indicator, project, targetFile);
 
                     if (!indicator.isCanceled()) {
                         fileAnalysisTracker.cacheLLMResponse(filePath, llmResponse);
@@ -286,15 +296,13 @@ public class AnalysisFeatures {
                 }
             }
 
-
-
             @Override
             public void onSuccess() {
                 if (llmResponse != null) {
                     if (isErrorResponse(llmResponse)) {
                         handleErrorResponse(project, llmResponse);
                     } else {
-                        displayLLMResponse(project, llmResponse);
+                        displayLLMResponse(project, llmResponse, targetFile);
                         updateButtonToViewDiff(project);
                         feedbackPanel.setVisible(true);
                     }
@@ -309,11 +317,9 @@ public class AnalysisFeatures {
                     LoggerUtil.info("LLM request cancelled by user");
                 }
 
-                if (filePath != null) {
-                    fileAnalysisTracker.invalidateLLMResponse(filePath);
-                    llmResponseTextArea.setText("LLM request cancelled.");
-                    fileAnalysisTracker.cacheLLMResponse(filePath, "LLM request cancelled.");
-                }
+                fileAnalysisTracker.invalidateLLMResponse(filePath);
+                llmResponseTextArea.setText("LLM request cancelled.");
+                fileAnalysisTracker.cacheLLMResponse(filePath, "LLM request cancelled.");
                 RequestStorage.clearCodeSnippets();
                 statusLabel.setText("LLM processing was cancelled.");
                 resetUIState();
@@ -327,7 +333,8 @@ public class AnalysisFeatures {
      * @param indicator The progress indicator for the request.
      * @return The LLM response as a string.
      */
-    private String requestLLMResponse(ProgressIndicator indicator, Project project) {
+    private String requestLLMResponse(ProgressIndicator indicator, Project project, VirtualFile targetFile
+    ) {
         String prompt = generatePromptFromBatchResult();
 
         // Validate model name
@@ -439,30 +446,33 @@ public class AnalysisFeatures {
      * @param project The current IntelliJ project.
      * @param llmResponse The LLM response to display.
      */
-    private void displayLLMResponse(Project project, String llmResponse) {
+    private void displayLLMResponse(Project project, String llmResponse, VirtualFile targetFile) {
         try {
-            Optional<VirtualFile> currentFileOpt = FileDetector.detectCurrentJavaFile(project);
-            if (currentFileOpt.isPresent()) {
-                VirtualFile currentFile = currentFileOpt.get();
-                Document document = FileDocumentManager.getInstance().getDocument(currentFile);
-                if (document != null) {
-                    // Process the response and get the processed content
-                    String processedContent = processLLMResponse(llmResponse, currentFile);
+            Document document = FileDocumentManager.getInstance().getDocument(targetFile);
+            if (document != null) {
+                // Process the response and get the processed content
+                String processedContent = processLLMResponse(llmResponse, targetFile);
 
-                    // Analyze the code quality with PMD
-                    CodeQualityAnalyzer analyzer = new CodeQualityAnalyzer();
-                    analyzer.analyzeCodeQuality(currentFile, processedContent);
-                    LoggerUtil.info("Processed content: " + processedContent);
+                // Analyze the code quality with PMD
+                CodeQualityAnalyzer analyzer = new CodeQualityAnalyzer();
+                analyzer.analyzeCodeQuality(targetFile, processedContent);
+                LoggerUtil.info("Processed content: " + processedContent);
 
-                    // Retrieve the last code snippets from RequestStorage
-                    String extractedSnippet = String.join("\n", RequestStorage.getCodeSnippets());
+                // Retrieve the last code snippets from RequestStorage
+                String extractedSnippet = fileAnalysisTracker.getCachedExtractedSnippet(targetFile.getPath());
 
-                    // Pass the extracted snippet to the openDiffView method
-                    openDiffView(project, currentFile, extractedSnippet, llmResponse);
-                }
+                // Pass the extracted snippet to the openDiffView method
+                openDiffView(project, targetFile, extractedSnippet, llmResponse);
             }
-            llmResponseTextArea.setText(llmResponse);
-            llmResponseTextArea.setCaretPosition(0);
+
+            // Check if current active file still matches targetFile before updating UI
+            Optional<VirtualFile> currentFileOpt = FileDetector.detectCurrentJavaFile(project);
+            if (currentFileOpt.isPresent() && currentFileOpt.get().equals(targetFile)) {
+                llmResponseTextArea.setText(llmResponse);
+                llmResponseTextArea.setCaretPosition(0);
+            } else {
+                LoggerUtil.info("Not updating UI - user has navigated to a different file");
+            }
         } catch (Exception e) {
             LoggerUtil.error("Error displaying LLM response: " + e.getMessage(), e);
         }
@@ -506,21 +516,21 @@ public class AnalysisFeatures {
     /**
      * Opens a diff view to compare the original code with the LLM refactored code.
      * @param project The current IntelliJ project.
-     * @param currentFile The current file being analyzed.
+     * @param targetFile The current file being analyzed.
      * @param extractedSnippet The original document text.
      * @param llmResponse The LLM refactored code.
      */
-    private void openDiffView(Project project, VirtualFile currentFile, String extractedSnippet, String llmResponse) {
+    private void openDiffView(Project project, VirtualFile targetFile, String extractedSnippet, String llmResponse) {
         try {
             Document llmDocument = EditorFactory.getInstance().createDocument(llmResponse);
 
             DocumentContent originalContent =
-                    DiffContentFactory.getInstance().create(project, extractedSnippet, currentFile.getFileType());
+                    DiffContentFactory.getInstance().create(project, extractedSnippet, targetFile.getFileType());
             DocumentContent modifiedContent =
-                    DiffContentFactory.getInstance().create(project, llmDocument, currentFile.getFileType());
+                    DiffContentFactory.getInstance().create(project, llmDocument, targetFile.getFileType());
 
             SimpleDiffRequest diffRequest = new SimpleDiffRequest(
-                    "Code Refactoring - " + currentFile.getName(),
+                    "Code Refactoring - " + targetFile.getName(),
                     originalContent,
                     modifiedContent,
                     "Original code snippet",
@@ -537,34 +547,32 @@ public class AnalysisFeatures {
      * @param project The current IntelliJ project.
      */
     public void updateButtonToViewDiff(Project project) {
+        Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
+        if (fileOpt.isEmpty()) return;
+
+        final VirtualFile targetFile = fileOpt.get();
+
         pmdButton.setText("View Diff");
         for (var listener : pmdButton.getActionListeners()) {
             pmdButton.removeActionListener(listener);
         }
-        pmdButton.addActionListener(e -> handleViewDiff(project));
+        pmdButton.addActionListener(e -> handleViewDiff(project, targetFile));
     }
 
     /**
      * Handles the action of viewing the diff between the original and LLM refactored code.
      * @param project The current IntelliJ project.
      */
-    private void handleViewDiff(Project project) {
-        Optional<VirtualFile> currentFileOpt = FileDetector.detectCurrentJavaFile(project);
-        if (currentFileOpt.isPresent()) {
-            VirtualFile file = currentFileOpt.get();
-            String cachedResponse = fileAnalysisTracker.getCachedLLMResponse(file.getPath());
+    private void handleViewDiff(Project project, VirtualFile targetFile) {
+        String cachedResponse = fileAnalysisTracker.getCachedLLMResponse(targetFile.getPath());
 
-            if (cachedResponse != null) {
-                displayLLMResponse(project, cachedResponse);
-                statusLabel.setText("Displaying cached LLM response.");
-            } else {
-                resultTextArea.setText("No cached response available. Please generate a new one.");
-                statusLabel.setText("Please generate a fresh LLM response.");
-                resetToLLMGenerationMode(project);
-            }
+        if (cachedResponse != null) {
+            displayLLMResponse(project, cachedResponse, targetFile);
+            statusLabel.setText("Displaying cached LLM response.");
         } else {
-            resultTextArea.setText("Error: No Java file selected.");
-            statusLabel.setText("Java file selection error.");
+            resultTextArea.setText("No cached response available. Please generate a new one.");
+            statusLabel.setText("Please generate a fresh LLM response.");
+            resetToLLMGenerationMode(project);
         }
     }
 
