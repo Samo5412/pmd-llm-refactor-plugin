@@ -66,7 +66,7 @@ public class RefactoringObjectiveProvider {
      */
     public static String getLLMInstruction() {
         return "Based on the above JSON context, refactor each code unit "
-                + "to reduce code complexity (e.g., simplify nested logic, reduce branching) while "
+                + "to reduce code complexity while "
                 + "preserving external behavior. Return only the refactored code for each unit. "
                 + "Do not include any additional explanations, commentary, or non-code text.";
     }
