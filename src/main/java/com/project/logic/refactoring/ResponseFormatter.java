@@ -26,7 +26,7 @@ public class ResponseFormatter {
      * @param blocksInfo The list of extracted CodeBlockInfo objects.
      * @return A formatted JSON string representing the API payload.
      */
-    public String formatApiResponse(List<CodeBlockInfo> blocksInfo) {
+    public String formatApiResponse(List<CodeBlockInfo> blocksInfo, boolean includeIssuesAndObjectives) {
         if (blocksInfo.isEmpty()) return "[]";
 
         // Get file name
@@ -61,7 +61,7 @@ public class ResponseFormatter {
 
             List<CodeBlockInfo> violations = violationsByClass.getOrDefault(classInfo, List.of());
             String violationsJson = violations.stream()
-                    .map(this::formatGroupedEntry)
+                    .map(info -> formatGroupedEntry(info, includeIssuesAndObjectives))
                     .collect(Collectors.joining(",\n"));
 
             response.append(violationsJson);
@@ -157,13 +157,35 @@ public class ResponseFormatter {
      * Formats an individual extracted code block for the JSON response.
      *
      * @param info The extracted code block information.
+     * @param includeIssues Whether to include issues and refactoring objectives in the output.
      * @return A formatted JSON entry for the extracted block.
      */
-    private String formatGroupedEntry(CodeBlockInfo info) {
+    private String formatGroupedEntry(CodeBlockInfo info, boolean includeIssues) {
         StringBuilder sb = new StringBuilder();
         sb.append("    {\n");
         sb.append("      \"block_type\": \"").append(escapeJson(info.blockType())).append("\",\n");
         sb.append("      \"extracted_code\": \"").append(escapeJson(info.codeSnippet())).append("\",\n");
+
+        // include issues and refactoring objectives
+        if (includeIssues) {
+            sb.append(formatIssuesAndObjective(info));
+        } else {
+            sb.deleteCharAt(sb.length() - 1);
+        }
+        sb.append("    }");
+
+        return sb.toString();
+    }
+
+    /**
+     * Creates the JSON content for violations and refactoring objectives.
+     * @param info The code block information containing violation details.
+     * @return A formatted JSON string with issues and refactoring objectives.
+     */
+    private String formatIssuesAndObjective(CodeBlockInfo info) {
+        StringBuilder sb = new StringBuilder();
+
+        // Add issues array
         sb.append("      \"issues\": [\n");
 
         // Extract all rule names to generate a combined refactoring objective
@@ -183,7 +205,7 @@ public class ResponseFormatter {
         // Add refactoring objective based on detected violations
         sb.append("      \"refactoring_objective\": \"")
                 .append(escapeJson(RefactoringObjectiveProvider.getRefactoringObjective(ruleNames)))
-                .append("\"\n    }");
+                .append("\"\n");
 
         return sb.toString();
     }
