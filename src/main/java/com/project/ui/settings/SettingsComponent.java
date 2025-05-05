@@ -1,5 +1,6 @@
 package com.project.ui.settings;
 
+import com.intellij.ui.JBColor;
 import com.intellij.util.ui.JBUI;
 
 import javax.swing.*;
@@ -18,6 +19,7 @@ public class SettingsComponent {
     private final JTextField tokenAmountField;
     private final JLabel apiKeyStatusLabel;
     private final JLabel infoIconLabel;
+    private final JCheckBox clearRefactorModePreferenceCheckbox;
 
     /**
      * Constructs a new SettingsComponent.
@@ -37,6 +39,7 @@ public class SettingsComponent {
                 "Appearance and Behavior -> System Settings -><br>" +
                 "Passwords and uncheck 'Do not save, forget<br>" +
                 "passwords after restart'</html>");
+        clearRefactorModePreferenceCheckbox = new JCheckBox("Clear saved refactoring mode preference");
         setupUI();
     }
 
@@ -50,6 +53,7 @@ public class SettingsComponent {
         gbc.weightx = 1.0;
 
         addComponentsToPanel(gbc);
+        addPreferencesComponents(gbc);
     }
 
     /**
@@ -185,6 +189,54 @@ public class SettingsComponent {
         gbc.weighty = 1.0;
         gbc.fill = GridBagConstraints.BOTH;
         panel.add(new JScrollPane(rulesetField), gbc);
+    }
+
+    /**
+     * Adds preference components to the main panel.
+     * @param gbc the GridBagConstraints used for layout.
+     */
+    private void addPreferencesComponents(GridBagConstraints gbc) {
+        // Create preferences section header
+        JLabel preferencesLabel = new JLabel("Preferences");
+        preferencesLabel.setFont(preferencesLabel.getFont().deriveFont(Font.BOLD));
+
+        gbc.gridx = 0;
+        gbc.gridy++;
+        gbc.gridwidth = 2;
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.insets = JBUI.insets(15, 0, 5, 0);
+        panel.add(preferencesLabel, gbc);
+
+        // Add checkbox to clear refactor mode preferences
+        gbc.gridy++;
+        gbc.insets = JBUI.insetsTop(5);
+        panel.add(clearRefactorModePreferenceCheckbox, gbc);
+
+        // Add description
+        JLabel prefDescriptionLabel = new JLabel(
+                "<html>If checked, any saved refactoring mode preference will be cleared when applying settings.</html>");
+        prefDescriptionLabel.setFont(prefDescriptionLabel.getFont().deriveFont(Font.PLAIN, 11f));
+        prefDescriptionLabel.setForeground(JBColor.GRAY);
+
+        gbc.gridy++;
+        gbc.insets = JBUI.insets(2, 20, 5, 0);
+        panel.add(prefDescriptionLabel, gbc);
+    }
+
+    /**
+     * Returns whether the clear refactor mode preference checkbox is selected.
+     * @return true if selected, false otherwise.
+     */
+    public boolean isClearRefactorModePreference() {
+        return clearRefactorModePreferenceCheckbox.isSelected();
+    }
+
+    /**
+     * Sets the clear refactor mode preference checkbox state.
+     * @param clear true to select, false to deselect.
+     */
+    public void setClearRefactorModePreference(boolean clear) {
+        clearRefactorModePreferenceCheckbox.setSelected(clear);
     }
 
     /**
