@@ -77,7 +77,8 @@ public class SettingsConfiguration implements Configurable {
                     !settingsComponent.getRulesetField().equals(settingsManager.getRuleset()) ||
                     !settingsComponent.getModelNameField().equals(settingsManager.getModelName()) ||
                     !settingsComponent.getTemperatureField().equals(settingsManager.getTemperature()) ||
-                    !settingsComponent.getTokenAmountField().equals(settingsManager.getTokenAmount());
+                    !settingsComponent.getTokenAmountField().equals(settingsManager.getTokenAmount()) ||
+                    settingsComponent.isClearRefactorModePreference() != settingsManager.isClearRefactorModePreference();
         } catch (Exception e) {
             LoggerUtil.error("Error checking if settings are modified", e);
             return false;
@@ -95,6 +96,7 @@ public class SettingsConfiguration implements Configurable {
             String newModelName = settingsComponent.getModelNameField();
             String newTemperature = settingsComponent.getTemperatureField();
             String newTokenAmount = settingsComponent.getTokenAmountField();
+            settingsManager.setClearRefactorModePreference(settingsComponent.isClearRefactorModePreference());
 
             if (isApiKeyChanged(newApiKey)) {
                 settingsComponent.showApiKeyUpdatedNotification();
@@ -105,6 +107,8 @@ public class SettingsConfiguration implements Configurable {
             settingsManager.setModelName(newModelName.isEmpty() ? null : newModelName);
             settingsManager.setTemperature(newTemperature.isEmpty() ? null : newTemperature);
             settingsManager.setTokenAmount(newTokenAmount.isEmpty() ? null : newTokenAmount);
+            settingsManager.processClearRefactorModePreference();
+            settingsComponent.setClearRefactorModePreference(settingsManager.isClearRefactorModePreference());
 
             loadSettings();
         } catch (Exception e) {
@@ -138,6 +142,7 @@ public class SettingsConfiguration implements Configurable {
             settingsComponent.disableApiUrlField();
             settingsComponent.getPanel().revalidate();
             settingsComponent.getPanel().repaint();
+            settingsComponent.setClearRefactorModePreference(settingsManager.isClearRefactorModePreference());
         } catch (Exception e) {
             LoggerUtil.error("Error resetting settings", e);
         }

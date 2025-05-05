@@ -3,6 +3,7 @@ package com.project.ui.settings;
 import com.intellij.credentialStore.CredentialAttributes;
 import com.intellij.credentialStore.Credentials;
 import com.intellij.ide.passwordSafe.PasswordSafe;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.notification.NotificationAction;
 import com.intellij.notification.NotificationGroupManager;
 import com.intellij.notification.NotificationType;
@@ -11,6 +12,7 @@ import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.components.*;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.project.ProjectManager;
 import com.intellij.util.xmlb.XmlSerializerUtil;
 import com.intellij.util.xmlb.annotations.Transient;
 import com.project.util.LoggerUtil;
@@ -38,6 +40,7 @@ public final class SettingsManager implements PersistentStateComponent<SettingsM
     private String modelName;
     private String temperature;
     private String tokenAmount;
+    private boolean clearRefactorModePreference = false;
 
     /**
      * The API key used for authentication.
@@ -220,6 +223,48 @@ public final class SettingsManager implements PersistentStateComponent<SettingsM
      */
     public void setTokenAmount(String newTokenAmount) {
         this.tokenAmount = newTokenAmount;
+    }
+
+    /**
+     * Checks if the refactor mode preference should be cleared.
+     * @return true if the preference should be cleared, false otherwise.
+     */
+    public boolean isClearRefactorModePreference() {
+        return clearRefactorModePreference;
+    }
+
+    /**
+     * Sets the refactor mode preference to be cleared.
+     * @param clearRefactorModePreference true if the preference should be cleared, false otherwise.
+     */
+    public void setClearRefactorModePreference(boolean clearRefactorModePreference) {
+        this.clearRefactorModePreference = clearRefactorModePreference;
+    }
+
+    /**
+     * Clears the refactor mode preference from all projects if requested
+     */
+    public void processClearRefactorModePreference() {
+        if (clearRefactorModePreference) {
+            LoggerUtil.info("Clearing refactor mode preferences");
+
+            for (Project project : ProjectManager.getInstance().getOpenProjects()) {
+                clearRefactorModePreferenceForProject(project);
+            }
+            clearRefactorModePreference = false;
+        }
+    }
+
+    /**
+     * Clears the refactor mode preference for a specific project
+     */
+    private void clearRefactorModePreferenceForProject(Project project) {
+        if (project != null) {
+            PropertiesComponent propertiesComponent = PropertiesComponent.getInstance(project);
+            propertiesComponent.unsetValue("com.project.refactor.mode");
+            propertiesComponent.setValue("com.project.refactor.remember", false);
+            LoggerUtil.info("Cleared refactor mode preferences for project: " + project.getName());
+        }
     }
 
     /**
