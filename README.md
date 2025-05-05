@@ -12,7 +12,7 @@ The PMD-LLM Refactor Plugin is an IntelliJ IDEA plugin specifically designed to 
 
 ## Getting Started
 
-Download the latest version from the [GitHub releases page](https://github.com/Samo5412/pmd-llm-refactor-plugin/releases/tag/v1.0.0) which contains all installation instructions and prerequisites.
+Download the latest version from the [GitHub releases page](https://github.com/Samo5412/pmd-llm-refactor-plugin/releases/tag/v1.0.0-alpha) which contains all installation instructions and prerequisites.
 
 ## Understanding the Analysis
 The plugin identifies complexity issues such as:
