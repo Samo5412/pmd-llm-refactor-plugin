@@ -101,6 +101,11 @@ public class AnalysisFeatures {
     private CompletableFuture<String> currentLLMRequest;
 
     /**
+     * Last selected refactor mode for LLM processing.
+     */
+    private RefactorMode lastSelectedMode;
+
+    /**
      * Constructor to initialize the analysis features.
      *
      * @param resultTextArea        Text area for displaying PMD analysis results.
@@ -260,6 +265,12 @@ public class AnalysisFeatures {
             return;
         }
 
+        // Refactor mode selection process
+        RefactorMode selectedMode = handleRefactorModeSelection(project);
+        if (selectedMode == null) {
+            return;
+        }
+
         Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
         if (fileOpt.isEmpty()) {
             Messages.showInfoMessage(project, "No Java file selected.", "File Selection Error");
@@ -328,6 +339,35 @@ public class AnalysisFeatures {
     }
 
     /**
+     * Handles the refactor mode selection process, showing a dialog if needed.
+     *
+     * @param project The current project
+     * @return The selected RefactorMode or null if selection was canceled
+     */
+    private RefactorMode handleRefactorModeSelection(Project project) {
+        RefactorMode selectedMode = RefactorModeDialog.getRememberedMode(project);
+
+        if (selectedMode == null) {
+            RefactorModeDialog modeDialog = new RefactorModeDialog(project);
+            if (!modeDialog.showAndGet()) {
+                return null;
+            }
+            selectedMode = modeDialog.getSelectedMode();
+        }
+
+        if (selectedMode == RefactorMode.BOTH) {
+            Messages.showInfoMessage(project,
+                    "The " + selectedMode + " mode is currently under development.",
+                    "Feature Under Development");
+            return null;
+        }
+
+        this.lastSelectedMode = selectedMode;
+
+        return selectedMode;
+    }
+
+    /**
      * Requests a response from the LLM service.
      *
      * @param indicator The progress indicator for the request.
@@ -335,7 +375,13 @@ public class AnalysisFeatures {
      */
     private String requestLLMResponse(ProgressIndicator indicator, Project project, VirtualFile targetFile
     ) {
-        String prompt = generatePromptFromBatchResult();
+        RefactorMode selectedMode = RefactorModeDialog.getRememberedMode(project);
+        if (lastSelectedMode != null) {
+            selectedMode = lastSelectedMode;
+        }
+        String prompt = generatePromptFromBatchResult(selectedMode);
+        LoggerUtil.info("Generated prompt: " + prompt);
+
 
         // Validate model name
         ValidationSettings modelResult = SettingsManager.getInstance().validateModelName(project);
@@ -431,12 +477,14 @@ public class AnalysisFeatures {
     /**
      * Generates a prompt based on the results of the last batch processing.
      *
+     * @param selectedMode The refactor mode determining whether to include issue details in the prompt.
      * @return The generated prompt string or a default prompt if no batch result is available.
      */
-    private String generatePromptFromBatchResult() {
+    private String generatePromptFromBatchResult(RefactorMode selectedMode) {
         if (lastBatchResult != null && !lastBatchResult.batches().isEmpty()) {
             ResponseFormatter formatter = new ResponseFormatter();
-            return formatter.formatApiResponse(lastBatchResult.batches().get(0));
+            boolean includeIssues = selectedMode == RefactorMode.HYBRID;
+            return formatter.formatApiResponse(lastBatchResult.batches().get(0), includeIssues);
         }
         return "Refactor the following Java code according to PMD suggestions.";
     }
