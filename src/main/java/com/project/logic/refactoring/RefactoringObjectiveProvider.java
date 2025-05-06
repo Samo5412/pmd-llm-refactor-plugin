@@ -51,8 +51,8 @@ public class RefactoringObjectiveProvider {
                     "Refactor deeply nested structures and simplify conditional logic to enhance readability.";
             case "NPathComplexity" ->
                     "Minimize execution paths by restructuring conditionals and avoiding unnecessary nesting.";
-            case "ExcessivePublicCount" ->
-                    "Reduce the number of public methods by encapsulating logic within private methods when possible.";
+            case "ExcessiveLinesOfCode" ->
+                    "Break down large methods into smaller, focused methods that are easier to maintain.";
             default ->
                     "Refactor the code to improve maintainability and reduce complexity while preserving functionality.";
         };
@@ -68,6 +68,6 @@ public class RefactoringObjectiveProvider {
         return "Based on the above JSON context, refactor each code unit "
                 + "to reduce code complexity while "
                 + "preserving external behavior. Return only the refactored code for each unit. "
-                + "Do not include any additional explanations, commentary, or non-code text.";
+                + "Do not include any additional explanations, or non-code text.";
     }
 }

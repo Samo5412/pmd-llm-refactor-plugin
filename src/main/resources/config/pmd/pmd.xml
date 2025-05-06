@@ -15,6 +15,13 @@
     <rule ref="category/java/design.xml/CyclomaticComplexity"/>
     <rule ref="category/java/design.xml/CognitiveComplexity"/>
     <rule ref="category/java/design.xml/NPathComplexity"/>
-    <rule ref="category/java/design.xml/ExcessivePublicCount"/>
+    <rule name="ExcessiveLinesOfCode"
+          language="java"
+          message="Method has too many lines of code"
+          class="com.project.logic.analysis.ExcessiveLinesOfCodeRule">
+        <properties>
+            <property name="threshold" value="30" />
+        </properties>
+    </rule>
 
 </ruleset>
