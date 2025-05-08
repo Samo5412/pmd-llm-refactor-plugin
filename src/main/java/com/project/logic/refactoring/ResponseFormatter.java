@@ -5,10 +5,7 @@ import com.project.model.Violation;
 import com.project.util.LoggerUtil;
 
 import java.nio.file.Paths;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -233,5 +230,93 @@ public class ResponseFormatter {
             throw new IllegalArgumentException("File path cannot be null or empty.");
         }
         return Paths.get(filePath).getFileName().toString();
+    }
+
+    /**
+     * Extracts method names from CodeBlockInfo objects that will be sent for refactoring.
+     *
+     * @param blocksInfo List of CodeBlockInfo objects containing code violations
+     * @return Map of method names to their corresponding CodeBlockInfo
+     */
+    public Map<String, CodeBlockInfo> getMethodsForRefactoring(List<CodeBlockInfo> blocksInfo) {
+        Map<String, CodeBlockInfo> methodMap = new HashMap<>();
+
+        for (CodeBlockInfo block : blocksInfo) {
+            if (!"Class".equals(block.blockType()) &&
+                    ("Method".equals(block.blockType()) || "Constructor".equals(block.blockType()))) {
+
+                String methodName = extractMethodName(block.codeSnippet());
+                methodMap.put(methodName, block);
+            }
+        }
+
+        return methodMap;
+    }
+
+    /**
+     * Extracts the method name from a code snippet.
+     *
+     * @param codeSnippet The method code
+     * @return The extracted method name
+     */
+    public static String extractMethodName(String codeSnippet) {
+        if (codeSnippet == null || codeSnippet.isEmpty()) {
+            return "Unknown method";
+        }
+
+        try {
+            String[] lines = codeSnippet.split("\n");
+            for (String line : lines) {
+                line = line.trim();
+                // Skip comments and empty lines
+                if (line.startsWith("/*") || line.startsWith("*") || line.startsWith("//") || line.isEmpty()) {
+                    continue;
+                }
+
+                // Try to find a method signature
+                int openParenIndex = line.indexOf('(');
+                if (openParenIndex > 0) {
+                    String beforeParen = line.substring(0, openParenIndex).trim();
+                    String[] parts = beforeParen.split("\\s+");
+                    if (parts.length > 0) {
+                        return parts[parts.length - 1];
+                    }
+                }
+            }
+
+            int violationCount = countViolations(codeSnippet);
+            if (violationCount > 0) {
+                return "Method with " + violationCount + " violations";
+            }
+
+            return "Unknown method";
+        } catch (Exception e) {
+            LoggerUtil.warn("Failed to parse method: " + e.getMessage());
+
+            int violationCount = countViolations(codeSnippet);
+            if (violationCount > 0) {
+                return "Method with " + violationCount + " violations";
+            }
+
+            return "Unknown method";
+        }
+    }
+
+    /**
+     * Counts the number of violations mentioned in a code snippet.
+     * This is a helper method for extractMethodName.
+     *
+     * @param codeSnippet The code snippet to analyze
+     * @return The number of violations mentioned
+     */
+    private static int countViolations(String codeSnippet) {
+        int count = 0;
+        String[] lines = codeSnippet.split("\n");
+        for (String line : lines) {
+            if (line.contains("violation") || line.contains("rule")) {
+                count++;
+            }
+        }
+        return count;
     }
 }
