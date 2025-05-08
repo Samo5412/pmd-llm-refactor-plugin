@@ -13,6 +13,7 @@ import com.project.model.Violation;
 import com.project.ui.core.CodeQualityResultDialog;
 import com.project.util.LoggerUtil;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -42,14 +43,18 @@ public class CodeQualityAnalyzer {
             }
 
             // Run PMD analysis on the original file
-            PMDRunner pmdRunner = new PMDRunner();
-            String originalPmdOutput = pmdRunner.runPMD(currentFile.getPath());
+            PMDRunner originalPmdRunner = new PMDRunner();
+            String originalPmdOutput = originalPmdRunner.runPMD(currentFile.getPath());
             List<Violation> originalViolations = violationExtractor.extractViolations(originalPmdOutput);
             List<CodeBlockInfo> originalBlocks = codeParser.extractViolatedBlocksInfo(currentFile.getPath(), originalViolations);
             String originalFormattedResults = responseFormatter.formatUserResponse(originalBlocks);
 
-            // Run PMD analysis on the processed content
-            String processedPmdOutput = pmdRunner.runPMDOnString(processedContent, currentFile.getName());
+            // Run PMD analysis on the processed content with a temporary ruleset
+            Path tempRulesetPath = createTemporaryRuleset();
+            PMDRunner processedPmdRunner = new PMDRunner();
+            processedPmdRunner.setTemporaryRuleSet(tempRulesetPath.toString());
+
+            String processedPmdOutput = processedPmdRunner.runPMDOnString(processedContent, currentFile.getName());
             List<Violation> processedViolations = violationExtractor.extractViolations(processedPmdOutput);
             String tempFileName = "processed_" + currentFile.getName();
             Path tempDir = Files.createTempDirectory("refactoring_");
@@ -58,7 +63,6 @@ public class CodeQualityAnalyzer {
 
             List<CodeBlockInfo> processedBlocks = codeParser.extractViolatedBlocksInfo(
                     tempFilePath.toString(), processedViolations);
-
 
             Files.delete(tempFilePath);
 
@@ -83,7 +87,48 @@ public class CodeQualityAnalyzer {
         }
     }
 
+    public Path createTemporaryRuleset() throws IOException {
+        String rulesetContent = """
+        <ruleset name="Temporary Ruleset"
+                 xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                 xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 http://pmd.sourceforge.net/ruleset_2_0_0.xsd">
+            <description>Temporary ruleset with lower thresholds.</description>
 
+            <rule ref="category/java/design.xml/CyclomaticComplexity">
+                <properties>
+                    <property name="methodReportLevel" value="1"/>
+                </properties>
+            </rule>
+
+            <rule ref="category/java/design.xml/CognitiveComplexity">
+                <properties>
+                    <property name="reportLevel" value="1"/>
+                </properties>
+            </rule>
+
+            <rule ref="category/java/design.xml/NPathComplexity">
+                <properties>
+                    <property name="reportLevel" value="1"/>
+                </properties>
+            </rule>
+
+            <rule name="ExcessiveLinesOfCode"
+                  language="java"
+                  message="Method has too many lines of code"
+                  class="com.project.logic.analysis.ExcessiveLinesOfCodeRule">
+                <properties>
+                    <property name="threshold" value="10"/>
+                </properties>
+            </rule>
+        </ruleset>
+        """;
+
+        Path tempRulesetPath = Files.createTempFile("pmd_temp_ruleset", ".xml");
+        Files.writeString(tempRulesetPath, rulesetContent);
+        return tempRulesetPath;
+    }
+    
     /**
      * Compares PMD analysis results and creates an AnalysisResult object.
      * Shows a dialog with the analysis results.
