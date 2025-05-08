@@ -81,10 +81,7 @@ public class MarkerBlockProcessor {
                 LoggerUtil.debug("Replaced marked block " + markerId +
                         " containing method '" + methodName + "' with implementation");
             } else {
-                // Mark as removed if no matching replacement found
-                replacement = "// <removed-method: " + methodName + " from marker " + markerId + ">\n" +
-                        "// Original method was removed as no matching refactored implementation was found";
-
+                replacement = markedBlock;
                 LoggerUtil.warn("No replacement found for method '" + methodName +
                         "' in marker block " + markerId + ". Method removed.");
             }
