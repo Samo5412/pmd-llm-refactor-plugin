@@ -106,6 +106,17 @@ public class AnalysisFeatures {
     private RefactorMode lastSelectedMode;
 
     /**
+     * Formatter for processing LLM responses.
+     */
+    private ResponseFormatter responseFormatter;
+
+    /**
+     * List of code blocks selected by the user for refactoring.
+     */
+    private List<CodeBlockInfo> userSelectedBlocks = Collections.emptyList();
+
+
+    /**
      * Constructor to initialize the analysis features.
      *
      * @param resultTextArea        Text area for displaying PMD analysis results.
@@ -145,7 +156,7 @@ public class AnalysisFeatures {
             PMDRunner pmdRunner = new PMDRunner();
             ViolationExtractor violationExtractor = new ViolationExtractor();
             CodeParser codeParser = new CodeParser(new JavaParser());
-            ResponseFormatter responseFormatter = new ResponseFormatter();
+            responseFormatter = new ResponseFormatter();
 
             PMDAnalyzer pmdAnalyzer = new PMDAnalyzer(pmdRunner, violationExtractor, codeParser, responseFormatter);
             String resultMessage = pmdAnalyzer.analyzeFile(project, file);
@@ -271,6 +282,12 @@ public class AnalysisFeatures {
             return;
         }
 
+        // Method selection
+        List<CodeBlockInfo> selectedMethods = handleMethodSelection(project);
+        if (selectedMethods.isEmpty()) {
+            return;
+        }
+
         Optional<VirtualFile> fileOpt = FileDetector.detectCurrentJavaFile(project);
         if (fileOpt.isEmpty()) {
             Messages.showInfoMessage(project, "No Java file selected.", "File Selection Error");
@@ -339,6 +356,30 @@ public class AnalysisFeatures {
     }
 
     /**
+     * Handles the selection of methods.
+     *
+     * @param project The current IntelliJ project.
+     * @return A list of user-selected code blocks for refactoring,
+     * or an empty list if none are selected.
+     */
+    private List<CodeBlockInfo> handleMethodSelection(Project project) {
+        if (lastBatchResult == null || lastBatchResult.allBlocks().isEmpty()) {
+            Messages.showInfoMessage(project,
+                    "No methods with issues found to refactor.",
+                    "No Methods Available");
+            return Collections.emptyList();
+        }
+
+        // Create a map of method names to CodeBlockInfo objects
+        Map<String, CodeBlockInfo> methodsToRefactor =
+                this.responseFormatter.getMethodsForRefactoring(lastBatchResult.allBlocks());
+
+        userSelectedBlocks = MethodSelectionDialog.showDialog(project, methodsToRefactor);
+        return userSelectedBlocks;
+
+    }
+
+    /**
      * Handles the refactor mode selection process, showing a dialog if needed.
      *
      * @param project The current project
@@ -368,6 +409,31 @@ public class AnalysisFeatures {
     }
 
     /**
+     * Builds a list of code blocks to be used for prompt generation.
+     *
+     * @param picked The list of initially selected code blocks.
+     * @return A sorted list of code blocks, including the selected ones and any relevant enclosing classes.
+     */
+    private List<CodeBlockInfo> buildPromptBlocks(List<CodeBlockInfo> picked) {
+        List<CodeBlockInfo> result = new ArrayList<>(picked);
+        if (lastBatchResult == null) return result;
+
+        for (CodeBlockInfo m : picked) {
+            lastBatchResult.allBlocks().stream()
+                    .filter(b -> "Class".equals(b.blockType())
+                            && m.startLine() >= b.startLine()
+                            && m.endLine()   <= b.endLine())
+                    .findFirst()
+                    .ifPresent(cls -> {
+                        if (!result.contains(cls)) result.add(cls);
+                    });
+        }
+        result.sort(Comparator.comparingInt(CodeBlockInfo::startLine));
+        return result;
+    }
+
+
+    /**
      * Requests a response from the LLM service.
      *
      * @param indicator The progress indicator for the request.
@@ -379,7 +445,14 @@ public class AnalysisFeatures {
         if (lastSelectedMode != null) {
             selectedMode = lastSelectedMode;
         }
-        String prompt = generatePromptFromBatchResult(selectedMode);
+
+        // Get the selected methods that were chosen by the user
+        List<CodeBlockInfo> selectedMethods = userSelectedBlocks;
+        if (selectedMethods == null || selectedMethods.isEmpty()) {
+            return "No methods selected for refactoring.";
+        }
+
+        String prompt = generatePromptFromBatchResult(selectedMode, selectedMethods);
         LoggerUtil.info("Generated prompt: " + prompt);
 
 
@@ -472,6 +545,7 @@ public class AnalysisFeatures {
     private void resetUIState() {
         setLLMRequestInProgress(false);
         pmdButton.setEnabled(true);
+        userSelectedBlocks = Collections.emptyList();
     }
 
     /**
@@ -480,11 +554,11 @@ public class AnalysisFeatures {
      * @param selectedMode The refactor mode determining whether to include issue details in the prompt.
      * @return The generated prompt string or a default prompt if no batch result is available.
      */
-    private String generatePromptFromBatchResult(RefactorMode selectedMode) {
-        if (lastBatchResult != null && !lastBatchResult.batches().isEmpty()) {
-            ResponseFormatter formatter = new ResponseFormatter();
+    private String generatePromptFromBatchResult(RefactorMode selectedMode, List<CodeBlockInfo> selectedMethods) {
+        if (lastBatchResult != null && !lastBatchResult.batches().isEmpty() && selectedMethods != null && !selectedMethods.isEmpty()) {
             boolean includeIssues = selectedMode == RefactorMode.HYBRID;
-            return formatter.formatApiResponse(lastBatchResult.batches().get(0), includeIssues);
+            List<CodeBlockInfo> promptBlocks = buildPromptBlocks(userSelectedBlocks);
+            return responseFormatter.formatApiResponse(promptBlocks, includeIssues);
         }
         return "Refactor the following Java code according to PMD suggestions.";
     }
