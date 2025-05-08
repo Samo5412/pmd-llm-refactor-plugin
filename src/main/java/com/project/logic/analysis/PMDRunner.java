@@ -39,6 +39,11 @@ public class PMDRunner {
     public PMDRunner() {
         initializeRuleSetFile();
     }
+    /**
+     * The path to the temporary ruleset file.
+     * This is used for running PMD on modified code.
+     */
+    private String temporaryRuleSetPath;
 
     /**
      * Loads the PMD ruleset file from resources into a temporary file.
@@ -70,6 +75,14 @@ public class PMDRunner {
     }
 
     /**
+     * Sets a temporary ruleset file path to override the default ruleset.
+     * @param temporaryRuleSetPath The path to the temporary ruleset file.
+     */
+    public void setTemporaryRuleSet(String temporaryRuleSetPath) {
+        this.temporaryRuleSetPath = temporaryRuleSetPath;
+    }
+
+    /**
      * Creates a PMD configuration for the specified path.
      *
      * @param path The path to analyze.
@@ -78,7 +91,12 @@ public class PMDRunner {
     private PMDConfiguration createPMDConfiguration(Path path) {
         PMDConfiguration config = new PMDConfiguration();
         config.setDefaultLanguageVersion(JavaLanguageModule.getInstance().getVersion("17"));
-        config.addRuleSet(ruleSetFile.getAbsolutePath());
+
+        // use temporary ruleset if set, otherwise use the default ruleset
+        String rulesetPath = (temporaryRuleSetPath != null) ?
+                temporaryRuleSetPath : ruleSetFile.getAbsolutePath();
+        config.addRuleSet(rulesetPath);
+
         config.addInputPath(path);
         config.setReportFormat("text");
         return config;
