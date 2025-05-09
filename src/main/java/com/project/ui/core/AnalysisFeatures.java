@@ -575,9 +575,12 @@ public class AnalysisFeatures {
                 // Process the response and get the processed content
                 String processedContent = processLLMResponse(llmResponse, targetFile);
 
+                // Wrap the LLM raw response in a proper Java class structure
+                String wrappedLlmResponse = wrapLlmResponseInClass(llmResponse, targetFile);
+
                 // Analyze the code quality with PMD
                 CodeQualityAnalyzer analyzer = new CodeQualityAnalyzer();
-                analyzer.analyzeCodeQuality(targetFile, processedContent);
+                analyzer.analyzeCodeQuality(targetFile, processedContent, wrappedLlmResponse);
                 LoggerUtil.info("Processed content: " + processedContent);
 
                 // Retrieve the last code snippets from RequestStorage
@@ -600,6 +603,54 @@ public class AnalysisFeatures {
         }
     }
 
+    /**
+     * Wraps the LLM response in a proper Java class structure for PMD analysis.
+     * @param llmResponse The raw LLM response to wrap
+     * @param targetFile The target file being refactored
+     * @return A string containing the wrapped LLM response in a proper Java class
+     */
+    private String wrapLlmResponseInClass(String llmResponse, VirtualFile targetFile) {
+        try {
+            String packageName = "";
+            Document document = FileDocumentManager.getInstance().getDocument(targetFile);
+            if (document != null) {
+                String fileContent = document.getText();
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("package\\s+([\\w\\.]+);");
+                java.util.regex.Matcher matcher = pattern.matcher(fileContent);
+                if (matcher.find()) {
+                    packageName = matcher.group(1);
+                }
+            }
+
+            // Extract class name from the file name
+            String className = targetFile.getNameWithoutExtension() + "Generated";
+
+            // Create the class wrapper
+            StringBuilder wrappedCode = new StringBuilder();
+            if (!packageName.isEmpty()) {
+                wrappedCode.append("package ").append(packageName).append(";\n\n");
+            }
+
+            wrappedCode.append("/**\n");
+            wrappedCode.append(" * Generated class for PMD analysis of LLM response.\n");
+            wrappedCode.append(" */\n");
+            wrappedCode.append("public class ").append(className).append(" {\n\n");
+
+            // Add the LLM response code
+            wrappedCode.append(llmResponse);
+
+            // Close the class
+            if (!llmResponse.trim().endsWith("}")) {
+                wrappedCode.append("\n\n");
+            }
+            wrappedCode.append("}");
+
+            return wrappedCode.toString();
+        } catch (Exception e) {
+            LoggerUtil.error("Error wrapping LLM response in class: " + e.getMessage(), e);
+            return "public class GeneratedCode {\n" + llmResponse + "\n}";
+        }
+    }
 
     /**
      * Processes the LLM response and updates the file content.
