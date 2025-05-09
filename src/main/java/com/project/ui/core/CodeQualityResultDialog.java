@@ -71,6 +71,17 @@ public class CodeQualityResultDialog extends DialogWrapper {
      */
     private static boolean disclaimerAcceptedGlobally = false;
 
+    /**
+     * Stores the LLM analysis of the PMD results.
+     */
+    private final String llmAnalysis;
+
+    /**
+     * Represents the count of violations detected with stricter PMD rules.
+     */
+    private final int llmRawViolationCount;
+
+
 
     /**
      * Constructor to initialize the dialog with the provided parameters.
@@ -83,9 +94,10 @@ public class CodeQualityResultDialog extends DialogWrapper {
      * @param processedViolationCount The count of processed violations.
      * @param summaryMessage         A summary message for the results.
      */
-    public CodeQualityResultDialog(Project project, String fileName, String originalResults,
-                                   String processedResults, int originalViolationCount,
-                                   int processedViolationCount, String summaryMessage) {
+    public CodeQualityResultDialog(Project project, String fileName,
+                                   String originalResults, String processedResults, String llmRawResults,
+                                   int originalViolationCount, int processedViolationCount, int llmRawViolationCount,
+                                   String summaryMessage) {
         super(project, false);
         this.fileName = fileName;
         this.originalResults = originalResults != null ? originalResults : "No results available";
@@ -93,6 +105,8 @@ public class CodeQualityResultDialog extends DialogWrapper {
         this.originalViolationCount = originalViolationCount;
         this.processedViolationCount = processedViolationCount;
         this.summaryMessage = summaryMessage;
+        this.llmAnalysis = llmRawResults != null ? llmRawResults : "No LLM analysis available";
+        this.llmRawViolationCount = llmRawViolationCount;
 
         this.disclaimerAccepted = disclaimerAcceptedGlobally;
 
@@ -418,7 +432,11 @@ public class CodeQualityResultDialog extends DialogWrapper {
         return panel;
     }
 
-
+    /**
+     * Creates a summary label with the number of issues and appropriate icon
+     *
+     * @return The summary label
+     */
     private @NotNull JLabel createSummaryLabel() {
         JLabel summaryLabel = new JLabel(summaryMessage);
         if (processedViolationCount < originalViolationCount) {
@@ -462,9 +480,10 @@ public class CodeQualityResultDialog extends DialogWrapper {
         Icon processedIcon = processedViolationCount > 0 ? AllIcons.General.Warning : AllIcons.General.InspectionsOK;
         tabbedPane.addTab("Processed Code Issues (" + processedViolationCount + ")", processedIcon, processedPanel);
 
-        // Add "side-by-side" comparison tab
-        JPanel comparisonPanel = createComparisonPanel();
-        tabbedPane.addTab("Side-by-Side Comparison", AllIcons.Actions.PreviewDetails, comparisonPanel);
+        // Add LLM Analysis tab
+        JPanel llmAnalysisPanel = createResultTabPanel(llmAnalysis, "Stricter Rules Analysis");
+        Icon llmAnalysisIcon = llmRawViolationCount > 0 ? AllIcons.General.Warning : AllIcons.General.InspectionsOK;
+        tabbedPane.addTab("Stricter Rules Analysis (" + llmRawViolationCount + ")", llmAnalysisIcon, llmAnalysisPanel);
 
         return tabbedPane;
     }
@@ -506,32 +525,6 @@ public class CodeQualityResultDialog extends DialogWrapper {
         return panel;
     }
 
-    /**
-     * Creates a side-by-side comparison panel
-     */
-    private JPanel createComparisonPanel() {
-        JPanel panel = new JPanel(new GridLayout(1, 2, 10, 0));
-        panel.setBorder(JBUI.Borders.empty(10));
-
-        // Original panel
-        JPanel originalPanel = createResultTabPanel(originalResults, "Original Code Issues (" + originalViolationCount + ")");
-        originalPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UIUtil.getBoundsColor(), 1),
-                JBUI.Borders.empty(5)
-        ));
-
-        // Processed panel
-        JPanel processedPanel = createResultTabPanel(processedResults, "Processed Code Issues (" + processedViolationCount + ")");
-        processedPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UIUtil.getBoundsColor(), 1),
-                JBUI.Borders.empty(5)
-        ));
-
-        panel.add(originalPanel);
-        panel.add(processedPanel);
-
-        return panel;
-    }
 
     /**
      * Creates the actions for the dialog.
