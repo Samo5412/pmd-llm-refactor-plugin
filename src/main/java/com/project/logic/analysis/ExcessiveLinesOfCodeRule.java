@@ -51,7 +51,7 @@ public class ExcessiveLinesOfCodeRule extends AbstractJavaRule {
         if (linesOfCode > threshold) {
             String methodName = node.getName();
             String message = String.format(
-                    "The method ''%s'' has %d lines of code (threshold: %d)",
+                    "The method ''%s'' has a %d lines of code (threshold: %d)",
                     methodName, linesOfCode, threshold
             );
             System.out.println("VIOLATION: " + message);
