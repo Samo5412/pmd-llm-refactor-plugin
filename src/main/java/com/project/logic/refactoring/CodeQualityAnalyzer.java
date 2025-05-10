@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Handles code quality analysis operations using PMD.
@@ -82,6 +83,10 @@ public class CodeQualityAnalyzer {
                     tempLlmRawFilePath.toString(), llmRawViolations);
             String llmRawFormattedResults = responseFormatter.formatUserResponse(llmRawBlocks);
 
+            // Create summary of metrics
+            Map<String, String> metricsSummary = MetricsExtractor.calculateMetrics(llmRawFormattedResults);
+
+
             // Clean up temporary files
             Files.deleteIfExists(tempProcessedFilePath);
             Files.deleteIfExists(tempLlmRawFilePath);
@@ -95,6 +100,7 @@ public class CodeQualityAnalyzer {
             LoggerUtil.info(processedFormattedResults);
             LoggerUtil.info("PMD Analysis Results for LLM raw file (stricter rules):");
             LoggerUtil.info(llmRawFormattedResults);
+            LoggerUtil.info("Metrics Summary: " + metricsSummary);
 
             // Compare and show results
             compareAndCreateResult(
@@ -104,7 +110,8 @@ public class CodeQualityAnalyzer {
                     originalViolations.size(),
                     processedViolations.size(),
                     llmRawViolations.size(),
-                    currentFile.getName()
+                    currentFile.getName(),
+                    metricsSummary
             );
         } catch (Exception e) {
             LoggerUtil.error("Error analyzing code quality: " + e.getMessage(), e);
@@ -142,7 +149,7 @@ public class CodeQualityAnalyzer {
                   message="Method has too many lines of code"
                   class="com.project.logic.analysis.ExcessiveLinesOfCodeRule">
                 <properties>
-                    <property name="threshold" value="10"/>
+                    <property name="threshold" value="1"/>
                 </properties>
             </rule>
         </ruleset>
@@ -172,7 +179,8 @@ public class CodeQualityAnalyzer {
             int originalViolationCount,
             int processedViolationCount,
             int llmRawViolationCount,
-            String fileName) {
+            String fileName,
+            Map<String, String> metricsSummary) {
 
         LoggerUtil.info("Original PMD violations (normal rules): " + originalViolationCount);
         LoggerUtil.info("Processed PMD violations (normal rules): " + processedViolationCount);
@@ -196,7 +204,7 @@ public class CodeQualityAnalyzer {
             new CodeQualityResultDialog(project, fileName,
                     originalResults, processedResults, llmRawResults,
                     originalViolationCount, processedViolationCount, llmRawViolationCount,
-                    message).show();
+                    message, metricsSummary).show();
         });
     }
 }
