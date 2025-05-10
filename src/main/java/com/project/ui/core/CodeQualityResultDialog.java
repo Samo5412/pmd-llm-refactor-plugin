@@ -16,6 +16,7 @@ import org.jetbrains.annotations.Nullable;
 import javax.swing.*;
 import javax.swing.text.DefaultCaret;
 import java.awt.*;
+import java.util.Map;
 
 /**
  * Dialog to display PMD code quality analysis results with enhanced UX.
@@ -81,6 +82,10 @@ public class CodeQualityResultDialog extends DialogWrapper {
      */
     private final int llmRawViolationCount;
 
+    /**
+     * Stores the summary of complexity metrics for the code quality analysis.
+     */
+    private final Map<String, String> metricsSummary;
 
 
     /**
@@ -97,7 +102,7 @@ public class CodeQualityResultDialog extends DialogWrapper {
     public CodeQualityResultDialog(Project project, String fileName,
                                    String originalResults, String processedResults, String llmRawResults,
                                    int originalViolationCount, int processedViolationCount, int llmRawViolationCount,
-                                   String summaryMessage) {
+                                   String summaryMessage, Map<String, String> metricsSummary) {
         super(project, false);
         this.fileName = fileName;
         this.originalResults = originalResults != null ? originalResults : "No results available";
@@ -107,6 +112,7 @@ public class CodeQualityResultDialog extends DialogWrapper {
         this.summaryMessage = summaryMessage;
         this.llmAnalysis = llmRawResults != null ? llmRawResults : "No LLM analysis available";
         this.llmRawViolationCount = llmRawViolationCount;
+        this.metricsSummary = metricsSummary;
 
         this.disclaimerAccepted = disclaimerAcceptedGlobally;
 
@@ -465,6 +471,40 @@ public class CodeQualityResultDialog extends DialogWrapper {
     }
 
     /**
+     * Creates a tab for displaying complexity metrics
+     * @param metricsSummary The summary of complexity metrics
+     * @return The metrics tab panel
+     */
+    private JPanel createMetricsTab(Map<String, String> metricsSummary) {
+        JPanel panel = new JPanel(new BorderLayout());
+
+        // Create header label
+        JLabel headerLabel = new JLabel("Summary of complexity metrics for all refactored methods");
+        headerLabel.setFont(headerLabel.getFont().deriveFont(Font.BOLD));
+        headerLabel.setBorder(JBUI.Borders.empty(10, 10, 5, 10));
+
+        // Create text area for metrics
+        JTextArea textArea = new JTextArea();
+        textArea.setEditable(false);
+        textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+
+        StringBuilder metricsText = new StringBuilder();
+        metricsSummary.forEach((metric, summary) -> {
+            metricsText.append(metric).append(": ").append(summary).append("\n");
+        });
+
+        textArea.setText(metricsText.toString());
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+
+        // Add components to the panel
+        panel.add(headerLabel, BorderLayout.NORTH);
+        panel.add(new JBScrollPane(textArea), BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    /**
      * Creates the tabbed pane with original and processed results
      */
     private @NotNull JBTabbedPane createCodeQualityTabs() {
@@ -484,6 +524,10 @@ public class CodeQualityResultDialog extends DialogWrapper {
         JPanel llmAnalysisPanel = createResultTabPanel(llmAnalysis, "Stricter Rules Analysis");
         Icon llmAnalysisIcon = llmRawViolationCount > 0 ? AllIcons.General.Warning : AllIcons.General.InspectionsOK;
         tabbedPane.addTab("Stricter Rules Analysis (" + llmRawViolationCount + ")", llmAnalysisIcon, llmAnalysisPanel);
+
+        // Add complexity metrics tab
+        JPanel metricsPanel = createMetricsTab(metricsSummary);
+        tabbedPane.addTab("Complexity Metrics Summary (Stricter Rules)", AllIcons.General.Information, metricsPanel);
 
         return tabbedPane;
     }
